@@ -17,7 +17,7 @@ roll_json = {
 }
 
 headers = {
-    "Authorization": "Bot Njk3NzkwNDE5MDM1MjI2MTEy.Xo8aKQ.Acg544rFljUP32eFs8Ugjw5U8bU"
+    "Authorization": ""
 }
     
 r = requests.post(url, headers=headers, json=roll_json)
