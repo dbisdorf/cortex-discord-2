@@ -443,8 +443,66 @@ time.sleep(5)
 xp_json = {
     "name": "xp",
     "type": 1,
-    "description": "Award or remove experience points."
+    "description": "Award or remove experience points.",
+    "options": [
+        {
+            "name": "add",
+            "description": "Give experience points.",
+            "type": 1,
+            "options": [
+                {
+                    "name": "number",
+                    "description": "How many experience points.",
+                    "type": 4,
+                    "required": True
+                },
+                {
+                    "name": "name",
+                    "description": "Name of character or player.",
+                    "type": 3,
+                    "required": True
+                }
+            ]
+        },
+        {
+            "name": "remove",
+            "description": "Remove or spend experience points.",
+            "type": 1,
+            "options": [
+                {
+                    "name": "number",
+                    "description": "How many experience points.",
+                    "type": 4,
+                    "required": True
+                },
+                {
+                    "name": "name",
+                    "description": "Name of character or player.",
+                    "type": 3,
+                    "required": True
+                }
+            ]
+        },
+        {
+            "name": "clear",
+            "description": "Remove all experience points for character or player.",
+            "type": 1,
+            "options": [
+                {
+                    "name": "name",
+                    "description": "Name of character or player.",
+                    "type": 3,
+                    "required": True
+                }
+            ]
+        }
+    ]
 }
+
+print("Submitting xp")
+r = requests.post(url, headers=headers, json=xp_json)
+print(r.text)
+time.sleep(5)
 
 clean_json = {
     "name": "clean",
@@ -452,16 +510,82 @@ clean_json = {
     "description": "Clean all game information from this channel."
 }
 
+print("Submitting clean")
+r = requests.post(url, headers=headers, json=clean_json)
+print(r.text)
+time.sleep(5)
+
 report_json = {
     "name": "report",
     "type": 1,
     "description": "Show CortexPal2000's usage statistics."
 }
 
+print("Submitting report")
+r = requests.post(url, headers=headers, json=report_json)
+print(r.text)
+time.sleep(5)
+
 option_json = {
     "name": "option",
     "type": 1,
-    "description": "Modify CortexPal2000's options for this channel."
+    "description": "Modify CortexPal2000's options for this channel.",
+    "options": [
+        {
+            "name": "best",
+            "description": "Whether suggestions for the best total and effect dice will appear.",
+            "type": 1,
+            "options": [
+                {
+                    "name": "on/off",
+                    "description": "Turn suggestions on or off.",
+                    "type": 3,
+                    "choices": [
+                        {
+                            "name": "on",
+                            "value": "best_on"
+                        },
+                        {
+                            "name": "off",
+                            "value": "best_off"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "join",
+            "description": "Control how other channels can participate in this channel's game.",
+            "type": 1,
+            "options": [
+                {
+                    "name": "on/off",
+                    "description": "Turn permissions on or off for other channels to participate.",
+                    "type": 3,
+                    "choices": [
+                        {
+                            "name": "on",
+                            "value": "join_on"
+                        },
+                        {
+                            "name": "off",
+                            "value": "join_off"
+                        }
+                    ]
+                },
+                {
+                    "name": "channel",
+                    "description": "All commands from this channel will apply to the named channel.",
+                    "type": 7
+                }
+            ]
+        }
+    ]
 }
+
+print("Submitting join")
+r = requests.post(url, headers=headers, json=join_json)
+print(r.text)
+time.sleep(5)
 
 
