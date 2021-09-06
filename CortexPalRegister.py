@@ -46,8 +46,14 @@ comp_json = {
             "type": 1,
             "options": [
                 {
+                    "name": "name",
+                    "description": "Complication name.",
+                    "type": 3,
+                    "required": True
+                },
+                {
                     "name": "dice",
-                    "description": "Complication dice and name.",
+                    "description": "Die size.",
                     "type": 3,
                     "required": True
                 }
@@ -584,7 +590,7 @@ option_json = {
 }
 
 print("Submitting join")
-r = requests.post(url, headers=headers, json=join_json)
+r = requests.post(url, headers=headers, json=option_json)
 print(r.text)
 time.sleep(5)
 

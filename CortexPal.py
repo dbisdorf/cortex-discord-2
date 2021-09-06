@@ -2,6 +2,8 @@ from endpoints import Controller, AccessDenied
 from discord_interactions import verify_key, InteractionType, InteractionResponseType
 import logging
 import json
+import configparser
+import sqlite3
 
 PURGE_DAYS = 180
 
@@ -42,48 +44,6 @@ db = sqlite3.connect(config['database']['file'])
 db.row_factory = sqlite3.Row
 cursor = db.cursor()
 
-cursor.execute(
-'CREATE TABLE IF NOT EXISTS GAME'
-'(GUID VARCHAR(32) PRIMARY KEY,'
-'SERVER INT NOT NULL,'
-'CHANNEL INT NOT NULL,'
-'ACTIVITY DATETIME NOT NULL)'
-)
-
-cursor.execute(
-'CREATE TABLE IF NOT EXISTS GAME_OPTIONS'
-'(GUID VARCHAR(32) PRIMARY KEY,'
-'KEY VARCHAR(16) NOT NULL,'
-'VALUE VARCHAR(256),'
-'PARENT_GUID VARCHAR(32) NOT NULL)'
-)
-
-cursor.execute(
-'CREATE TABLE IF NOT EXISTS DIE'
-'(GUID VARCHAR(32) PRIMARY KEY,'
-'NAME VARCHAR(64),'
-'SIZE INT NOT NULL,'
-'QTY INT NOT NULL,'
-'PARENT_GUID VARCHAR(32) NOT NULL)'
-)
-
-cursor.execute(
-'CREATE TABLE IF NOT EXISTS DICE_COLLECTION'
-'(GUID VARCHAR(32) PRIMARY KEY,'
-'CATEGORY VARCHAR(64) NOT NULL,'
-'GRP VARCHAR(64),'
-'PARENT_GUID VARCHAR(32) NOT NULL)'
-)
-
-cursor.execute(
-'CREATE TABLE IF NOT EXISTS RESOURCE'
-'(GUID VARCHAR(32) PRIMARY KEY,'
-'CATEGORY VARCHAR(64) NOT NULL,'
-'NAME VARCHAR(64) NOT NULL,'
-'QTY INT NOT NULL,'
-'PARENT_GUID VARCHAR(64) NOT NULL)'
-)
-
 # Classes and functions follow.
 
 class DiscordResponse:
@@ -110,17 +70,13 @@ class CortexError(Exception):
     def __str__(self):
         return self.message.format(*(self.args))
 
-def separate_dice_and_name(inputs):
+def parse_string_into_dice(input):
     """Sort the words of an input string, and identify which are dice notations and which are not."""
 
     dice = []
-    words = []
-    for input in inputs:
-        if DICE_EXPRESSION.fullmatch(input):
-            dice.append(Die(input))
-        else:
-            words.append(input.lower().capitalize())
-    return {'dice': dice, 'name': ' '.join(words)}
+    for word in input.split(' '):
+        dice.append(Die(input))
+    return dice
 
 def separate_numbers_and_name(inputs):
     """Sort the words of an input string, and identify which are numerals and which are not."""
@@ -949,10 +905,96 @@ class Default(Controller):
                 logger.info('Responding to PING')
                 response = DiscordResponsePong()
             else:
-                response = DiscordResponse('Hello!')
+                if kwargs['data']['name'] == 'info':
+                    game = self.get_game_info(kwargs['guid_id'], kwargs['channel_id'])
+                    response = self.info(game, kwargs['channel_id'])
+                elif kwargs['data']['name'] == 'pin':
+                    response = DiscordResponse('Pin command not yet implemented.')
+                elif kwargs['data']['name'] == 'comp':
+                    game = self.get_game_info(kwargs['guid_id'], kwargs['channel_id'])
+                    response = self.comp(game, kwargs['options'])
+                else:
+                    response = DiscordResponse(UNEXPECTED_ERROR)
         else:
             raise AccessDenied()
                 
         logger.info(response.json())
         return response.json()
+
+    def get_game_info(self, guild, channel, suppress_join=False):
+        """Match a server and channel to a Cortex game."""
+        game_info = None
+        fallback_game = None
+        game_key = [context.guild, context.message.channel]
+        joined_channel = None
+        while not game_info:
+            for existing_game in self.games:
+                if game_key == existing_game[0]:
+                    game_info = existing_game[1]
+            if not game_info:
+                game_info = CortexGame(self.roller, game_key[0], game_key[1])
+                self.games.append([game_key, game_info])
+            if joined_channel:
+                if game_info.get_option(JOIN_OPTION) != 'on':
+                    joined_channel_name = 'other'
+                    for channel in context.guild.channels:
+                        if channel.id == game_key[1]:
+                            joined_channel_name = channel.name
+                    game_info = fallback_game
+                    game_info.set_option(JOIN_OPTION, 'off')
+                    raise CortexError(JOIN_ERROR, joined_channel_name)
+            elif not suppress_join:
+                joined_channel = game_info.get_option(JOIN_OPTION)
+                if joined_channel and joined_channel != 'on' and joined_channel != 'off':
+                    fallback_game = game_info
+                    game_info = None
+                    game_key = [context.guild.id, int(joined_channel)]
+        return game_info
+
+    def info(self, game, origin_channel):
+        """Display all game information."""
+
+        try:
+            game.update_activity()
+            output = game.output()
+            if game.get_channel() != ctx.message.channel.id:
+                for channel in ctx.guild.channels:
+                    if channel.id == game.get_channel():
+                        output = output.replace(GAME_INFO_HEADER, GAME_INFO_HEADER + '\n(from channel #{0})'.format(channel.name))
+            return DiscordResponse(output)
+        except CortexError as err:
+            return DiscordResponse(err)
+        except:
+            logging.error(traceback.format_exc())
+            return DiscordResponse(UNEXPECTED_ERROR)
+
+    def comp(self, game, options):
+        logging.debug("comp command invoked")
+        try:
+            output = ''
+            game = self.get_game_info(ctx)
+            game.update_activity()
+            if options[0]['name'] == 'add':
+                dice = parse_string_into_dice(options[0]['options'][2])
+                if not dice:
+                    raise CortexError(DIE_MISSING_ERROR)
+                elif len(dice) > 1:
+                    raise CortexError(DIE_EXCESS_ERROR)
+                elif dice[0].qty > 1:
+                    raise CortexError(DIE_EXCESS_ERROR)
+                output = game.complications.add(name, dice[0])
+            elif options[0]['name'] == 'remove':
+                output = game.complications.remove(options[0]['options'][0]['value'])
+            elif args[0] in UP_SYNONYMS:
+                output = game.complications.step_up(options[0]['options'][0]['value'])
+            elif args[0] in DOWN_SYNONYMS:
+                output = game.complications.step_down(options[0]['options'][0]['value'])
+            else:
+                raise CortexError(INSTRUCTION_ERROR, args[0], '$comp')
+            return DiscordResponse(output)
+        except CortexError as err:
+            return DiscordResponse(err)
+        except:
+            logging.error(traceback.format_exc())
+            return DiscordResponse(UNEXPECTED_ERROR)
 

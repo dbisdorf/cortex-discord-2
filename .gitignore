@@ -1,4 +1,5 @@
 venv/
 logs/
 cortexpal.ini
+cortexpal.db
 
