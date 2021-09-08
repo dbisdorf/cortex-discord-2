@@ -117,15 +117,15 @@ pp_json = {
             "type": 1,
             "options": [
                 {
-                    "name": "number",
-                    "description": "How many plot points.",
-                    "type": 4,
-                    "required": True
-                },
-                {
                     "name": "name",
                     "description": "Name of character or player.",
                     "type": 3,
+                    "required": True
+                },
+                {
+                    "name": "number",
+                    "description": "How many plot points.",
+                    "type": 4,
                     "required": True
                 }
             ]
@@ -136,15 +136,15 @@ pp_json = {
             "type": 1,
             "options": [
                 {
-                    "name": "number",
-                    "description": "How many plot points.",
-                    "type": 4,
-                    "required": True
-                },
-                {
                     "name": "name",
                     "description": "Name of character or player.",
                     "type": 3,
+                    "required": True
+                },
+                {
+                    "name": "number",
+                    "description": "How many plot points.",
+                    "type": 4,
                     "required": True
                 }
             ]
@@ -543,7 +543,7 @@ option_json = {
             "type": 1,
             "options": [
                 {
-                    "name": "on/off",
+                    "name": "switch",
                     "description": "Turn suggestions on or off.",
                     "type": 3,
                     "choices": [
@@ -565,7 +565,7 @@ option_json = {
             "type": 1,
             "options": [
                 {
-                    "name": "on/off",
+                    "name": "switch",
                     "description": "Turn permissions on or off for other channels to participate.",
                     "type": 3,
                     "choices": [
@@ -589,7 +589,7 @@ option_json = {
     ]
 }
 
-print("Submitting join")
+print("Submitting options")
 r = requests.post(url, headers=headers, json=option_json)
 print(r.text)
 time.sleep(5)

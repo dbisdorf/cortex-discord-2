@@ -1,9 +1,18 @@
+# TODO
+# What do we pass to command functions? DB? Cursor? Game object? Roller?
+
 from endpoints import Controller, AccessDenied
 from discord_interactions import verify_key, InteractionType, InteractionResponseType
 import logging
 import json
 import configparser
 import sqlite3
+import random
+import os
+import traceback
+import re
+import uuid
+from datetime import datetime, timedelta, timezone
 
 PURGE_DAYS = 180
 
@@ -26,6 +35,9 @@ UNKNOWN_COMMAND_ERROR = 'That\'s not a valid command.'
 JOIN_ERROR = 'The #{0} channel does not allow other channels to join. Future commands apply only to this channel.'
 UNEXPECTED_ERROR = 'Oops. A software error interrupted this command.'
 
+BEST_OPTION = 'best'
+JOIN_OPTION = 'join'
+
 GAME_INFO_HEADER = '**Cortex Game Information**'
 ABOUT_TEXT = 'CortexPal2000 v1.0.0: a Discord bot for Cortex Prime RPG players.'
 
@@ -38,12 +50,6 @@ config.read('cortexpal.ini')
 
 logger = logging.getLogger(__name__)
 
-# Set up database.
-
-db = sqlite3.connect(config['database']['file'])
-db.row_factory = sqlite3.Row
-cursor = db.cursor()
-
 # Classes and functions follow.
 
 class DiscordResponse:
@@ -51,7 +57,7 @@ class DiscordResponse:
 
     def __init__(self, text):
         self.elements['type'] = InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE
-        self.elements['data'] = {'content': text}
+        self.elements['data'] = {'content': str(text)}
 
     def json(self):
         return self.elements
@@ -70,37 +76,33 @@ class CortexError(Exception):
     def __str__(self):
         return self.message.format(*(self.args))
 
-def parse_string_into_dice(input):
+def parse_string_into_dice(words):
     """Sort the words of an input string, and identify which are dice notations and which are not."""
 
     dice = []
-    for word in input.split(' '):
-        dice.append(Die(input))
+    for word in words.split(' '):
+        dice.append(Die(word))
     return dice
 
-def separate_numbers_and_name(inputs):
+def capitalize_words(words):
     """Sort the words of an input string, and identify which are numerals and which are not."""
 
-    numbers = []
-    words = []
-    for input in inputs:
-        if input.isdecimal():
-            numbers.append(int(input))
-        else:
-            words.append(input.lower().capitalize())
-    return {'numbers': numbers, 'name': ' '.join(words)}
+    capitalized = []
+    for word in words:
+        capitalized.append(word.lower().capitalize())
+    return ' '.join(capitalized)
 
 def fetch_all_dice_for_parent(db_parent):
     """Given an object from the database, get all the dice that belong to it."""
 
     dice = []
-    cursor.execute('SELECT * FROM DIE WHERE PARENT_GUID=:PARENT_GUID', {'PARENT_GUID':db_parent.db_guid})
+    db_parent.cursor.execute('SELECT * FROM DIE WHERE PARENT_GUID=:PARENT_GUID', {'PARENT_GUID':db_parent.db_guid})
     fetching = True
     while fetching:
-        row = cursor.fetchone()
+        row = db_parent.cursor.fetchone()
         if row:
             die = Die(name=row['NAME'], size=row['SIZE'], qty=row['QTY'])
-            die.already_in_db(db_parent, row['GUID'])
+            die.already_in_db(db_parent.db, db_parent, row['GUID'])
             dice.append(die)
         else:
             fetching = False
@@ -149,6 +151,8 @@ class Die:
         self.qty = qty
         self.db_parent = None
         self.db_guid = None
+        self.db = None
+        self.cursor = None
         if expression:
             if not DICE_EXPRESSION.fullmatch(expression):
                 raise CortexError(DIE_STRING_ERROR, expression)
@@ -160,17 +164,21 @@ class Die:
                     self.qty = int(numbers[0])
                 self.size = int(numbers[1])
 
-    def store_in_db(self, db_parent):
+    def store_in_db(self, db, db_parent):
         """Store this die in the database, under a given parent."""
 
+        self.db = db
+        self.cursor = self.db.cursor()
         self.db_parent = db_parent
         self.db_guid = uuid.uuid1().hex
-        cursor.execute('INSERT INTO DIE (GUID, NAME, SIZE, QTY, PARENT_GUID) VALUES (?, ?, ?, ?, ?)', (self.db_guid, self.name, self.size, self.qty, self.db_parent.db_guid))
-        db.commit()
+        self.cursor.execute('INSERT INTO DIE (GUID, NAME, SIZE, QTY, PARENT_GUID) VALUES (?, ?, ?, ?, ?)', (self.db_guid, self.name, self.size, self.qty, self.db_parent.db_guid))
+        self.db.commit()
 
-    def already_in_db(self, db_parent, db_guid):
+    def already_in_db(self, db, db_parent, db_guid):
         """Inform the Die that it is already in the database, under a given parent and guid."""
 
+        self.db = db
+        self.cursor = self.db.cursor()
         self.db_parent = db_parent
         self.db_guid = db_guid
 
@@ -178,8 +186,8 @@ class Die:
         """Remove this Die from the database."""
 
         if self.db_guid:
-            cursor.execute('DELETE FROM DIE WHERE GUID=:guid', {'guid':self.db_guid})
-            db.commit()
+            self.cursor.execute('DELETE FROM DIE WHERE GUID=:guid', {'guid':self.db_guid})
+            self.db.commit()
 
     def step_down(self):
         """Step down the die size."""
@@ -206,15 +214,15 @@ class Die:
 
         self.size = new_size
         if self.db_guid:
-            cursor.execute('UPDATE DIE SET SIZE=:size WHERE GUID=:guid', {'size':self.size, 'guid':self.db_guid})
-            db.commit()
+            self.cursor.execute('UPDATE DIE SET SIZE=:size WHERE GUID=:guid', {'size':self.size, 'guid':self.db_guid})
+            self.db.commit()
 
     def update_qty(self, new_qty):
         """Change the quantity of the dice."""
 
         self.qty = new_qty
         if self.db_guid:
-            cursor.execute('UPDATE DIE SET QTY=:qty WHERE GUID=:guid', {'qty':self.qty, 'guid':self.db_guid})
+            self.cursor.execute('UPDATE DIE SET QTY=:qty WHERE GUID=:guid', {'qty':self.qty, 'guid':self.db_guid})
 
     def is_max(self):
         """Identify whether the Die is at the maximum allowed size."""
@@ -237,7 +245,9 @@ class Die:
 class NamedDice:
     """A collection of user-named single-die traits, suitable for complications and assets."""
 
-    def __init__(self, category, group, db_parent, db_guid=None):
+    def __init__(self, db, category, group, db_parent, db_guid=None):
+        self.db = db
+        self.cursor = db.cursor()
         self.dice = {}
         self.category = category
         self.group = group
@@ -246,16 +256,16 @@ class NamedDice:
             self.db_guid = db_guid
         else:
             if self.group:
-                cursor.execute('SELECT * FROM DICE_COLLECTION WHERE PARENT_GUID=:PARENT_GUID AND CATEGORY=:category AND GRP=:group', {'PARENT_GUID':self.db_parent.db_guid, 'category':self.category, 'group':self.group})
+                self.cursor.execute('SELECT * FROM DICE_COLLECTION WHERE PARENT_GUID=:PARENT_GUID AND CATEGORY=:category AND GRP=:group', {'PARENT_GUID':self.db_parent.db_guid, 'category':self.category, 'group':self.group})
             else:
-                cursor.execute('SELECT * FROM DICE_COLLECTION WHERE PARENT_GUID=:PARENT_GUID AND CATEGORY=:category AND GRP IS NULL', {'PARENT_GUID':self.db_parent.db_guid, 'category':self.category})
-            row = cursor.fetchone()
+                self.cursor.execute('SELECT * FROM DICE_COLLECTION WHERE PARENT_GUID=:PARENT_GUID AND CATEGORY=:category AND GRP IS NULL', {'PARENT_GUID':self.db_parent.db_guid, 'category':self.category})
+            row = self.cursor.fetchone()
             if row:
                 self.db_guid = row['GUID']
             else:
                 self.db_guid = uuid.uuid1().hex
-                cursor.execute('INSERT INTO DICE_COLLECTION (GUID, CATEGORY, GRP, PARENT_GUID) VALUES (?, ?, ?, ?)', (self.db_guid, self.category, self.group, self.db_parent.db_guid))
-                db.commit()
+                self.cursor.execute('INSERT INTO DICE_COLLECTION (GUID, CATEGORY, GRP, PARENT_GUID) VALUES (?, ?, ?, ?)', (self.db_guid, self.category, self.group, self.db_parent.db_guid))
+                self.db.commit()
         fetched_dice = fetch_all_dice_for_parent(self)
         for die in fetched_dice:
             self.dice[die.name] = die
@@ -265,8 +275,8 @@ class NamedDice:
 
         for name in list(self.dice):
             self.dice[name].remove_from_db()
-        cursor.execute("DELETE FROM DICE_COLLECTION WHERE GUID=:db_guid", {'db_guid':self.db_guid})
-        db.commit()
+        self.cursor.execute("DELETE FROM DICE_COLLECTION WHERE GUID=:db_guid", {'db_guid':self.db_guid})
+        self.db.commit()
         self.dice = {}
 
     def is_empty(self):
@@ -279,7 +289,7 @@ class NamedDice:
 
         die.name = name
         if not name in self.dice:
-            die.store_in_db(self)
+            die.store_in_db(self.db, self)
             self.dice[name] = die
             return 'New: ' + self.output(name)
         elif self.dice[name].is_max():
@@ -343,8 +353,9 @@ class NamedDice:
 class DicePool:
     """A single-purpose collection of die sizes and quantities, suitable for doom pools, crisis pools, and growth pools."""
 
-    def __init__(self, roller, group, incoming_dice=[]):
-        self.roller = roller
+    def __init__(self, db, group, incoming_dice=[]):
+        self.db = db
+        self.cursor = db.cursor()
         self.group = group
         self.dice = [None, None, None, None, None]
         self.db_parent = None
@@ -357,8 +368,8 @@ class DicePool:
 
         self.db_guid = uuid.uuid1().hex
         self.db_parent = db_parent
-        cursor.execute("INSERT INTO DICE_COLLECTION (GUID, CATEGORY, GRP, PARENT_GUID) VALUES (?, 'pool', ?, ?)", (self.db_guid, self.group, self.db_parent.db_guid))
-        db.commit()
+        self.cursor.execute("INSERT INTO DICE_COLLECTION (GUID, CATEGORY, GRP, PARENT_GUID) VALUES (?, 'pool', ?, ?)", (self.db_guid, self.group, self.db_parent.db_guid))
+        self.db.commit()
 
     def already_in_db(self, db_parent, db_guid):
         """Inform the pool that it is already in the database, under a given parent and guid."""
@@ -390,8 +401,8 @@ class DicePool:
         for index in range(len(self.dice)):
             if self.dice[index]:
                 self.dice[index].remove_from_db()
-        cursor.execute("DELETE FROM DICE_COLLECTION WHERE GUID=:db_guid", {'db_guid':self.db_guid})
-        db.commit()
+        self.cursor.execute("DELETE FROM DICE_COLLECTION WHERE GUID=:db_guid", {'db_guid':self.db_guid})
+        self.db.commit()
         self.dice = [None, None, None, None, None]
 
     def add(self, dice):
@@ -404,7 +415,7 @@ class DicePool:
             else:
                 self.dice[index] = die
                 if self.db_parent and not die.db_parent:
-                    die.store_in_db(self)
+                    die.store_in_db(self.db, self)
         return self.output()
 
     def remove(self, dice):
@@ -427,7 +438,7 @@ class DicePool:
 
     def temporary_copy(self):
         """Return a temporary, non-persisted copy of this dice pool."""
-        copy = DicePool(self.roller, self.group)
+        copy = DicePool(self.group)
         dice_copies = []
         for die in self.dice:
             if die:
@@ -435,7 +446,7 @@ class DicePool:
         copy.add(dice_copies)
         return copy
 
-    def roll(self, suggest_best=False):
+    def roll(self, roller, suggest_best=False):
         """Roll all the dice in the pool, and return a formatted summary of the results."""
 
         output = ''
@@ -445,7 +456,7 @@ class DicePool:
             if die:
                 output += '{0}D{1} : '.format(separator, die.size)
                 for num in range(die.qty):
-                    roll = {'value': self.roller.roll(die.size), 'size': die.size}
+                    roll = {'value': roller.roll(die.size), 'size': die.size}
                     roll_str = str(roll['value'])
                     if roll_str == '1':
                         roll_str = '**(1)**'
@@ -502,21 +513,22 @@ class DicePool:
 class DicePools:
     """A collection of DicePool objects."""
 
-    def __init__(self, roller, db_parent):
-        self.roller = roller
+    def __init__(self, db, db_parent):
+        self.db = db
+        self.cursor = db.cursor()
         self.pools = {}
         self.db_parent = db_parent
-        cursor.execute('SELECT * FROM DICE_COLLECTION WHERE CATEGORY="pool" AND PARENT_GUID=:PARENT_GUID', {'PARENT_GUID':self.db_parent.db_guid})
+        self.cursor.execute('SELECT * FROM DICE_COLLECTION WHERE CATEGORY="pool" AND PARENT_GUID=:PARENT_GUID', {'PARENT_GUID':self.db_parent.db_guid})
         pool_info = []
         fetching = True
         while fetching:
-            row = cursor.fetchone()
+            row = self.cursor.fetchone()
             if row:
                 pool_info.append({'db_guid':row['GUID'], 'grp':row['GRP'], 'parent_guid':row['PARENT_GUID']})
             else:
                 fetching = False
         for fetched_pool in pool_info:
-            new_pool = DicePool(self.roller, fetched_pool['grp'])
+            new_pool = DicePool(fetched_pool['grp'])
             new_pool.already_in_db(fetched_pool['parent_guid'], fetched_pool['db_guid'])
             new_pool.fetch_dice_from_db()
             self.pools[new_pool.group] = new_pool
@@ -537,7 +549,7 @@ class DicePools:
         """Add some dice to a pool under a given name."""
 
         if not group in self.pools:
-            self.pools[group] = DicePool(self.roller, group)
+            self.pools[group] = DicePool(group)
             self.pools[group].store_in_db(self.db_parent)
         self.pools[group].add(dice)
         return '{0}: {1}'.format(group, self.pools[group].output())
@@ -583,14 +595,16 @@ class DicePools:
 class Resources:
     """Holds simple quantity-based resources, like plot points."""
 
-    def __init__(self, category, db_parent):
+    def __init__(self, db, category, db_parent):
+        self.db = db
+        self.cursor = db.cursor()
         self.resources = {}
         self.category = category
         self.db_parent = db_parent
-        cursor.execute("SELECT * FROM RESOURCE WHERE PARENT_GUID=:PARENT_GUID AND CATEGORY=:category", {'PARENT_GUID':self.db_parent.db_guid, 'category':self.category})
+        self.cursor.execute("SELECT * FROM RESOURCE WHERE PARENT_GUID=:PARENT_GUID AND CATEGORY=:category", {'PARENT_GUID':self.db_parent.db_guid, 'category':self.category})
         fetching = True
         while fetching:
-            row = cursor.fetchone()
+            row = self.cursor.fetchone()
             if row:
                 self.resources[row['NAME']] = {'qty':row['QTY'], 'db_guid':row['GUID']}
             else:
@@ -604,8 +618,8 @@ class Resources:
     def remove_from_db(self):
         """Removce these resources from the database."""
 
-        cursor.executemany("DELETE FROM RESOURCE WHERE GUID=:db_guid", [{'db_guid':self.resources[resource]['db_guid']} for resource in list(self.resources)])
-        db.commit()
+        self.cursor.executemany("DELETE FROM RESOURCE WHERE GUID=:db_guid", [{'db_guid':self.resources[resource]['db_guid']} for resource in list(self.resources)])
+        self.db.commit()
         self.resources = {}
 
     def add(self, name, qty=1):
@@ -614,12 +628,12 @@ class Resources:
         if not name in self.resources:
             db_guid = uuid.uuid1().hex
             self.resources[name] = {'qty':qty, 'db_guid':db_guid}
-            cursor.execute("INSERT INTO RESOURCE (GUID, CATEGORY, NAME, QTY, PARENT_GUID) VALUES (?, ?, ?, ?, ?)", (db_guid, self.category, name, qty, self.db_parent.db_guid))
-            db.commit()
+            self.cursor.execute("INSERT INTO RESOURCE (GUID, CATEGORY, NAME, QTY, PARENT_GUID) VALUES (?, ?, ?, ?, ?)", (db_guid, self.category, name, qty, self.db_parent.db_guid))
+            self.db.commit()
         else:
             self.resources[name]['qty'] += qty
-            cursor.execute("UPDATE RESOURCE SET QTY=:qty WHERE GUID=:db_guid", {'qty':self.resources[name]['qty'], 'db_guid':self.resources[name]['db_guid']})
-            db.commit()
+            self.cursor.execute("UPDATE RESOURCE SET QTY=:qty WHERE GUID=:db_guid", {'qty':self.resources[name]['qty'], 'db_guid':self.resources[name]['db_guid']})
+            self.db.commit()
         return self.output(name)
 
     def remove(self, name, qty=1):
@@ -630,16 +644,16 @@ class Resources:
         if self.resources[name]['qty'] < qty:
             raise CortexError(HAS_ONLY_ERROR, name, self.resources[name]['qty'], self.category)
         self.resources[name]['qty'] -= qty
-        cursor.execute("UPDATE RESOURCE SET QTY=:qty WHERE GUID=:db_guid", {'qty':self.resources[name]['qty'], 'db_guid':self.resources[name]['db_guid']})
-        db.commit()
+        self.cursor.execute("UPDATE RESOURCE SET QTY=:qty WHERE GUID=:db_guid", {'qty':self.resources[name]['qty'], 'db_guid':self.resources[name]['db_guid']})
+        self.db.commit()
         return self.output(name)
 
     def clear(self, name):
         """Remove a name from the catalog entirely."""
         if not name in self.resources:
             raise CortexError(HAS_NONE_ERROR, name, self.category)
-        cursor.execute("DELETE FROM RESOURCE WHERE GUID=:db_guid", {'db_guid':self.resources[name]['db_guid']})
-        db.commit()
+        self.cursor.execute("DELETE FROM RESOURCE WHERE GUID=:db_guid", {'db_guid':self.resources[name]['db_guid']})
+        self.db.commit()
         del self.resources[name]
         return 'Cleared {0} from {1} list.'.format(name, self.category)
 
@@ -661,15 +675,17 @@ class Resources:
 class GroupedNamedDice:
     """Holds named dice that are separated by groups, such as mental and physical stress (the dice names) assigned to characters (the dice groups)."""
 
-    def __init__(self, category, db_parent):
+    def __init__(self, db, category, db_parent):
+        self.db = db
+        self.cursor = db.cursor()
         self.groups = {}
         self.category = category
         self.db_parent = db_parent
-        cursor.execute("SELECT * FROM DICE_COLLECTION WHERE PARENT_GUID=:parent_guid AND CATEGORY=:category", {'parent_guid':self.db_parent.db_guid, 'category':self.category})
+        self.cursor.execute("SELECT * FROM DICE_COLLECTION WHERE PARENT_GUID=:parent_guid AND CATEGORY=:category", {'parent_guid':self.db_parent.db_guid, 'category':self.category})
         group_guids = {}
         fetching = True
         while fetching:
-            row = cursor.fetchone()
+            row = self.cursor.fetchone()
             if row:
                 group_guids[row['GRP']] = row['GUID']
             else:
@@ -747,18 +763,19 @@ class GroupedNamedDice:
 class CortexGame:
     """All information for a game, within a single server and channel."""
 
-    def __init__(self, roller, server, channel):
-        self.roller = roller
+    def __init__(self, db, server, channel):
+        self.db = db
+        self.cursor = db.cursor()
         self.server = server
         self.channel = channel
         self.pinned_message = None
 
-        cursor.execute('SELECT * FROM GAME WHERE SERVER=:server AND CHANNEL=:channel', {"server":server, "channel":channel})
-        row = cursor.fetchone()
+        self.cursor.execute('SELECT * FROM GAME WHERE SERVER=:server AND CHANNEL=:channel', {"server":server, "channel":channel})
+        row = self.cursor.fetchone()
         if not row:
             self.db_guid = uuid.uuid1().hex
-            cursor.execute('INSERT INTO GAME (GUID, SERVER, CHANNEL, ACTIVITY) VALUES (?, ?, ?, ?)', (self.db_guid, server, channel, datetime.now(timezone.utc)))
-            db.commit()
+            self.cursor.execute('INSERT INTO GAME (GUID, SERVER, CHANNEL, ACTIVITY) VALUES (?, ?, ?, ?)', (self.db_guid, server, channel, datetime.now(timezone.utc)))
+            self.db.commit()
         else:
             self.db_guid = row['GUID']
         self.new()
@@ -766,12 +783,12 @@ class CortexGame:
     def new(self):
         """Set up new, empty traits for the game."""
 
-        self.complications = NamedDice('complication', None, self)
-        self.assets = NamedDice('asset', None, self)
-        self.pools = DicePools(self.roller, self)
-        self.plot_points = Resources('plot points', self)
-        self.stress = GroupedNamedDice('stress', self)
-        self.xp = Resources('xp', self)
+        self.complications = NamedDice(self.db, 'complication', None, self)
+        self.assets = NamedDice(self.db, 'asset', None, self)
+        self.pools = DicePools(self.db, self)
+        self.plot_points = Resources(self.db, 'plot points', self)
+        self.stress = GroupedNamedDice(self.db, 'stress', self)
+        self.xp = Resources(self.db, 'xp', self)
 
     def clean(self):
         """Resets and erases the game's traits."""
@@ -818,8 +835,8 @@ class CortexGame:
 
     def get_option(self, key):
         value = None
-        cursor.execute('SELECT * FROM GAME_OPTIONS WHERE PARENT_GUID=:game_guid AND KEY=:key', {'game_guid':self.db_guid, 'key':key})
-        row = cursor.fetchone()
+        self.cursor.execute('SELECT * FROM GAME_OPTIONS WHERE PARENT_GUID=:game_guid AND KEY=:key', {'game_guid':self.db_guid, 'key':key})
+        row = self.cursor.fetchone()
         if row:
             value = row['VALUE']
         return value
@@ -836,14 +853,14 @@ class CortexGame:
         prior = self.get_option(key)
         if not prior:
             new_guid = uuid.uuid1().hex
-            cursor.execute('INSERT INTO GAME_OPTIONS (GUID, KEY, VALUE, PARENT_GUID) VALUES (?, ?, ?, ?)', (new_guid, key, value, self.db_guid))
+            self.cursor.execute('INSERT INTO GAME_OPTIONS (GUID, KEY, VALUE, PARENT_GUID) VALUES (?, ?, ?, ?)', (new_guid, key, value, self.db_guid))
         else:
-            cursor.execute('UPDATE GAME_OPTIONS SET VALUE=:value where KEY=:key and PARENT_GUID=:game_guid', {'value':value, 'key':key, 'game_guid':self.db_guid})
-        db.commit()
+            self.cursor.execute('UPDATE GAME_OPTIONS SET VALUE=:value where KEY=:key and PARENT_GUID=:game_guid', {'value':value, 'key':key, 'game_guid':self.db_guid})
+        self.db.commit()
 
     def update_activity(self):
-        cursor.execute('UPDATE GAME SET ACTIVITY=:now WHERE GUID=:db_guid', {'now':datetime.now(timezone.utc), 'db_guid':self.db_guid})
-        db.commit()
+        self.cursor.execute('UPDATE GAME SET ACTIVITY=:now WHERE GUID=:db_guid', {'now':datetime.now(timezone.utc), 'db_guid':self.db_guid})
+        self.db.commit()
 
 class Roller:
     """Generates random die rolls and remembers the frequency of results."""
@@ -900,19 +917,29 @@ class Default(Controller):
 
         response = None
 
-        if verify_key(self.request.body.read(), self.request.headers['X-Signature-Ed25519'], self.request.headers['X-Signature-Timestamp'], PUBLIC_KEY):
+        if verify_key(self.request.body.read(), self.request.headers['X-Signature-Ed25519'], self.request.headers['X-Signature-Timestamp'], config['discord']['public_key']):
             if kwargs['type'] == InteractionType.PING:
                 logger.info('Responding to PING')
                 response = DiscordResponsePong()
             else:
+                self.db = sqlite3.connect(config['database']['file'])
+                self.db.row_factory = sqlite3.Row
+                self.roller = Roller()
+
                 if kwargs['data']['name'] == 'info':
-                    game = self.get_game_info(kwargs['guid_id'], kwargs['channel_id'])
+                    game = self.get_game_info(kwargs['guild_id'], kwargs['channel_id'])
                     response = self.info(game, kwargs['channel_id'])
                 elif kwargs['data']['name'] == 'pin':
                     response = DiscordResponse('Pin command not yet implemented.')
                 elif kwargs['data']['name'] == 'comp':
-                    game = self.get_game_info(kwargs['guid_id'], kwargs['channel_id'])
-                    response = self.comp(game, kwargs['options'])
+                    game = self.get_game_info(kwargs['guild_id'], kwargs['channel_id'])
+                    response = self.comp(game, kwargs['data']['options'])
+                elif kwargs['data']['name'] == 'pp':
+                    game = self.get_game_info(kwargs['guild_id'], kwargs['channel_id'])
+                    response = self.pp(game, kwargs['data']['options'])
+                elif kwargs['data']['name'] == 'roll':
+                    game = self.get_game_info(kwargs['guild_id'], kwargs['channel_id'])
+                    response = self.roll(game, kwargs['data']['options'])
                 else:
                     response = DiscordResponse(UNEXPECTED_ERROR)
         else:
@@ -925,15 +952,10 @@ class Default(Controller):
         """Match a server and channel to a Cortex game."""
         game_info = None
         fallback_game = None
-        game_key = [context.guild, context.message.channel]
+        game_key = [guild, channel]
         joined_channel = None
         while not game_info:
-            for existing_game in self.games:
-                if game_key == existing_game[0]:
-                    game_info = existing_game[1]
-            if not game_info:
-                game_info = CortexGame(self.roller, game_key[0], game_key[1])
-                self.games.append([game_key, game_info])
+            game_info = CortexGame(self.db, game_key[0], game_key[1])
             if joined_channel:
                 if game_info.get_option(JOIN_OPTION) != 'on':
                     joined_channel_name = 'other'
@@ -957,10 +979,13 @@ class Default(Controller):
         try:
             game.update_activity()
             output = game.output()
-            if game.get_channel() != ctx.message.channel.id:
+            if game.get_channel() != origin_channel:
+                output = output.replace(GAME_INFO_HEADER, GAME_INFO_HEADER + '\n(from joined channel)')
+                '''
                 for channel in ctx.guild.channels:
                     if channel.id == game.get_channel():
                         output = output.replace(GAME_INFO_HEADER, GAME_INFO_HEADER + '\n(from channel #{0})'.format(channel.name))
+                '''
             return DiscordResponse(output)
         except CortexError as err:
             return DiscordResponse(err)
@@ -972,25 +997,25 @@ class Default(Controller):
         logging.debug("comp command invoked")
         try:
             output = ''
-            game = self.get_game_info(ctx)
             game.update_activity()
+            comp_name = capitalize_words(options[0]['options'][0]['value'])
             if options[0]['name'] == 'add':
-                dice = parse_string_into_dice(options[0]['options'][2])
+                dice = parse_string_into_dice(options[0]['options'][1]['value'])
                 if not dice:
                     raise CortexError(DIE_MISSING_ERROR)
                 elif len(dice) > 1:
                     raise CortexError(DIE_EXCESS_ERROR)
                 elif dice[0].qty > 1:
                     raise CortexError(DIE_EXCESS_ERROR)
-                output = game.complications.add(name, dice[0])
+                output = game.complications.add(comp_name, dice[0])
             elif options[0]['name'] == 'remove':
-                output = game.complications.remove(options[0]['options'][0]['value'])
+                output = game.complications.remove(comp_name)
             elif args[0] in UP_SYNONYMS:
-                output = game.complications.step_up(options[0]['options'][0]['value'])
+                output = game.complications.step_up(comp_name)
             elif args[0] in DOWN_SYNONYMS:
-                output = game.complications.step_down(options[0]['options'][0]['value'])
+                output = game.complications.step_down(comp_name)
             else:
-                raise CortexError(INSTRUCTION_ERROR, args[0], '$comp')
+                raise CortexError(INSTRUCTION_ERROR, options[0], 'comp')
             return DiscordResponse(output)
         except CortexError as err:
             return DiscordResponse(err)
@@ -998,3 +1023,39 @@ class Default(Controller):
             logging.error(traceback.format_exc())
             return DiscordResponse(UNEXPECTED_ERROR)
 
+    def pp(self, game, options):
+        logging.debug("pp command invoked")
+        try:
+            output = ''
+            update_pin = False
+            game.update_activity()
+            char_name = capitalize_words(options[0]['options'][0]['value'])
+            if options[0]['name'] == 'add':
+                output = 'Plot points for ' + game.plot_points.add(char_name, qty)
+            elif options[0]['name'] == 'remove':
+                output = 'Plot points for ' + game.plot_points.remove(char_name, qty)
+            elif options[0]['name'] == 'clear':
+                output = game.plot_points.clear(char_name)
+            else:
+                raise CortexError(INSTRUCTION_ERROR, options[0], 'pp')
+            return DiscordResponse(output)
+        except CortexError as err:
+            return DiscordResponse(err)
+        except:
+            logging.error(traceback.format_exc())
+            return DiscordResponse(UNEXPECTED_ERROR)
+
+    def roll(self, game, options):
+        logging.debug("roll command invoked")
+        results = {}
+        try:
+            suggest_best = game.get_option_as_bool(BEST_OPTION)
+            dice = parse_string_into_dice(options[0]['value'])
+            pool = DicePool(self.db, None, incoming_dice=dice)
+            echo_line = 'Rolling: {0}\n'.format(pool.output())
+            return DiscordResponse(echo_line + pool.roll(self.roller, suggest_best))
+        except CortexError as err:
+            return DiscordResponse(err)
+        except:
+            logging.error(traceback.format_exc())
+            return DiscordResponse(UNEXPECTED_ERROR)
