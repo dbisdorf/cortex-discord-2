@@ -1,5 +1,6 @@
 # TODO
 # What do we pass to command functions? DB? Cursor? Game object? Roller?
+# Should the command functions just return a string?
 
 from endpoints import Controller, AccessDenied
 from discord_interactions import verify_key, InteractionType, InteractionResponseType
@@ -88,7 +89,7 @@ def capitalize_words(words):
     """Sort the words of an input string, and identify which are numerals and which are not."""
 
     capitalized = []
-    for word in words:
+    for word in words.split(' '):
         capitalized.append(word.lower().capitalize())
     return ' '.join(capitalized)
 
@@ -353,9 +354,7 @@ class NamedDice:
 class DicePool:
     """A single-purpose collection of die sizes and quantities, suitable for doom pools, crisis pools, and growth pools."""
 
-    def __init__(self, db, group, incoming_dice=[]):
-        self.db = db
-        self.cursor = db.cursor()
+    def __init__(self, group, incoming_dice=[]):
         self.group = group
         self.dice = [None, None, None, None, None]
         self.db_parent = None
@@ -363,17 +362,21 @@ class DicePool:
         if incoming_dice:
             self.add(incoming_dice)
 
-    def store_in_db(self, db_parent):
+    def store_in_db(self, db, db_parent):
         """Store this pool in the database."""
 
+        self.db = db
+        self.cursor = db.cursor()
         self.db_guid = uuid.uuid1().hex
         self.db_parent = db_parent
         self.cursor.execute("INSERT INTO DICE_COLLECTION (GUID, CATEGORY, GRP, PARENT_GUID) VALUES (?, 'pool', ?, ?)", (self.db_guid, self.group, self.db_parent.db_guid))
         self.db.commit()
 
-    def already_in_db(self, db_parent, db_guid):
+    def already_in_db(self, db, db_parent, db_guid):
         """Inform the pool that it is already in the database, under a given parent and guid."""
 
+        self.db = db
+        self.cursor = db.cursor()
         self.db_parent = db_parent
         self.db_guid = db_guid
 
@@ -529,7 +532,7 @@ class DicePools:
                 fetching = False
         for fetched_pool in pool_info:
             new_pool = DicePool(fetched_pool['grp'])
-            new_pool.already_in_db(fetched_pool['parent_guid'], fetched_pool['db_guid'])
+            new_pool.already_in_db(self.db, fetched_pool['parent_guid'], fetched_pool['db_guid'])
             new_pool.fetch_dice_from_db()
             self.pools[new_pool.group] = new_pool
 
@@ -550,7 +553,7 @@ class DicePools:
 
         if not group in self.pools:
             self.pools[group] = DicePool(group)
-            self.pools[group].store_in_db(self.db_parent)
+            self.pools[group].store_in_db(self.db, self.db_parent)
         self.pools[group].add(dice)
         return '{0}: {1}'.format(group, self.pools[group].output())
 
@@ -940,6 +943,9 @@ class Default(Controller):
                 elif kwargs['data']['name'] == 'roll':
                     game = self.get_game_info(kwargs['guild_id'], kwargs['channel_id'])
                     response = self.roll(game, kwargs['data']['options'])
+                elif kwargs['data']['name'] == 'pool':
+                    game = self.get_game_info(kwargs['guild_id'], kwargs['channel_id'])
+                    response = self.pool(game, kwargs['data']['options'])
                 else:
                     response = DiscordResponse(UNEXPECTED_ERROR)
         else:
@@ -1031,8 +1037,10 @@ class Default(Controller):
             game.update_activity()
             char_name = capitalize_words(options[0]['options'][0]['value'])
             if options[0]['name'] == 'add':
+                qty = options[0]['options'][1]['value']
                 output = 'Plot points for ' + game.plot_points.add(char_name, qty)
             elif options[0]['name'] == 'remove':
+                qty = options[0]['options'][1]['value']
                 output = 'Plot points for ' + game.plot_points.remove(char_name, qty)
             elif options[0]['name'] == 'clear':
                 output = game.plot_points.clear(char_name)
@@ -1051,7 +1059,7 @@ class Default(Controller):
         try:
             suggest_best = game.get_option_as_bool(BEST_OPTION)
             dice = parse_string_into_dice(options[0]['value'])
-            pool = DicePool(self.db, None, incoming_dice=dice)
+            pool = DicePool(None, incoming_dice=dice)
             echo_line = 'Rolling: {0}\n'.format(pool.output())
             return DiscordResponse(echo_line + pool.roll(self.roller, suggest_best))
         except CortexError as err:
@@ -1059,3 +1067,34 @@ class Default(Controller):
         except:
             logging.error(traceback.format_exc())
             return DiscordResponse(UNEXPECTED_ERROR)
+
+    def pool(self, game, options):
+        logging.debug("pool command invoked")
+        try:
+            output = ''
+            game.update_activity()
+            suggest_best = game.get_option_as_bool(BEST_OPTION)
+            pool_name = capitalize_words(options[0]['options'][0]['value'])
+            dice = None
+            if len(options[0]['options']) > 1:
+                dice = parse_string_into_dice(options[0]['options'][1]['value'])
+            if options[0]['name'] == 'add':
+                output = game.pools.add(pool_name, dice)
+            elif options[0]['name'] == 'remove':
+                output = game.pools.remove(pool_name, dice)
+            elif options[0]['name'] == 'clear':
+                output = game.pools.clear(pool_name)
+            elif options[0]['name'] == 'roll':
+                temp_pool = game.pools.temporary_copy(pool_name)
+                if dice:
+                    temp_pool.add(dice)
+                output = temp_pool.roll(self.roller, suggest_best)
+            else:
+                raise CortexError(INSTRUCTION_ERROR, options[0]['name'], 'pool')
+            return DiscordResponse(output)
+        except CortexError as err:
+            return DiscordResponse(err)
+        except:
+            logging.error(traceback.format_exc())
+            return DiscordResponse(UNEXPECTED_ERROR)
+
