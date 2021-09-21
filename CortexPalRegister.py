@@ -386,14 +386,14 @@ asset_json = {
             "type": 1,
             "options": [
                 {
-                    "name": "die",
-                    "description": "Die size.",
+                    "name": "name",
+                    "description": "The name of the asset.",
                     "type": 3,
                     "required": True
                 },
                 {
-                    "name": "name",
-                    "description": "The name of the asset.",
+                    "name": "die",
+                    "description": "Die size.",
                     "type": 3,
                     "required": True
                 }
@@ -457,15 +457,15 @@ xp_json = {
             "type": 1,
             "options": [
                 {
-                    "name": "number",
-                    "description": "How many experience points.",
-                    "type": 4,
-                    "required": True
-                },
-                {
                     "name": "name",
                     "description": "Name of character or player.",
                     "type": 3,
+                    "required": True
+                },
+                {
+                    "name": "number",
+                    "description": "How many experience points.",
+                    "type": 4,
                     "required": True
                 }
             ]
@@ -476,15 +476,15 @@ xp_json = {
             "type": 1,
             "options": [
                 {
-                    "name": "number",
-                    "description": "How many experience points.",
-                    "type": 4,
-                    "required": True
-                },
-                {
                     "name": "name",
                     "description": "Name of character or player.",
                     "type": 3,
+                    "required": True
+                },
+                {
+                    "name": "number",
+                    "description": "How many experience points.",
+                    "type": 4,
                     "required": True
                 }
             ]
@@ -546,14 +546,15 @@ option_json = {
                     "name": "switch",
                     "description": "Turn suggestions on or off.",
                     "type": 3,
+                    "required": True,
                     "choices": [
                         {
                             "name": "on",
-                            "value": "best_on"
+                            "value": "on"
                         },
                         {
                             "name": "off",
-                            "value": "best_off"
+                            "value": "off"
                         }
                     ]
                 }
@@ -571,11 +572,11 @@ option_json = {
                     "choices": [
                         {
                             "name": "on",
-                            "value": "join_on"
+                            "value": "on"
                         },
                         {
                             "name": "off",
-                            "value": "join_off"
+                            "value": "off"
                         }
                     ]
                 },

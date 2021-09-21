@@ -13,7 +13,7 @@ import os
 import traceback
 import re
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 PURGE_DAYS = 180
 
@@ -694,7 +694,7 @@ class GroupedNamedDice:
             else:
                 fetching = False
         for group in group_guids:
-            new_group = NamedDice(self.category, group, self.db_parent, db_guid=group_guids[group])
+            new_group = NamedDice(self.db, self.category, group, self.db_parent, db_guid=group_guids[group])
             self.groups[group] = new_group
 
     def is_empty(self):
@@ -713,7 +713,7 @@ class GroupedNamedDice:
         """Add dice with a given name to a given group."""
 
         if not group in self.groups:
-            self.groups[group] = NamedDice(self.category, group, self.db_parent)
+            self.groups[group] = NamedDice(self.db, self.category, group, self.db_parent)
         return self.groups[group].add(name, die)
 
     def remove(self, group, name):
@@ -868,27 +868,50 @@ class CortexGame:
 class Roller:
     """Generates random die rolls and remembers the frequency of results."""
 
-    def __init__(self):
-        self.results = {}
-        for size in DIE_SIZES:
-            self.results[size] = [0] * size
+    def __init__(self, db):
+        self.db = db
+        self.cursor = db.cursor()
 
     def roll(self, size):
         """Roll a die of a given size and return the result."""
 
         face = random.SystemRandom().randrange(1, int(size) + 1)
-        self.results[size][face - 1] += 1
+        today = date.today()
+
+        self.cursor.execute('SELECT * FROM TALLY WHERE TALLY_DATE=:date AND FACES=:faces AND RESULT=:result', {'date':today, 'faces':size, 'result':face})
+        row = self.cursor.fetchone()
+        if row:
+            new_tally = row['TALLY'] + 1
+            self.cursor.execute('UPDATE TALLY SET TALLY=:tally WHERE TALLY_DATE=:date AND FACES=:faces AND RESULT=:result', {'tally': new_tally, 'date':today, 'faces':size, 'result':face})
+        else:
+            self.cursor.execute('INSERT INTO TALLY (TALLY_DATE, FACES, RESULT, TALLY) VALUES (?, ?, ?, 1)', (today, size, face))
+        self.db.commit()
+
         return face
 
     def output(self):
         """Return a report of die roll frequencies."""
 
         total = 0
+        results = {}
+        for size in DIE_SIZES:
+            results[size] = [0] * size
+
+        fetching = True
+
+        self.cursor.execute('SELECT * FROM TALLY')
+        while fetching:
+            row = self.cursor.fetchone()
+            if row:
+                logging.debug('faces {0} result {1} tally {2}'.format(row['FACES'], row['RESULT'], row['TALLY']))
+                results[row['FACES']][row['RESULT'] - 1] += row['TALLY']
+            else:
+                fetching = False
 
         frequency = ''
         separator = ''
-        for size in self.results:
-            subtotal = sum(self.results[size])
+        for size in results:
+            subtotal = sum(results[size])
             total += subtotal
             frequency += '**{0}D{1}** : {2} rolls'.format(separator, size, subtotal)
             separator = '\n'
@@ -896,8 +919,8 @@ class Roller:
                 for face in range(1, size + 1):
                     frequency += ' : **{0}** {1}x {2}%'.format(
                         face,
-                        self.results[size][face - 1],
-                        round(float(self.results[size][face - 1]) / float(subtotal) * 100.0, 1))
+                        results[size][face - 1],
+                        round(float(results[size][face - 1]) / float(subtotal) * 100.0, 1))
 
         output = (
         '**Randomness**\n'
@@ -927,27 +950,35 @@ class Default(Controller):
             else:
                 self.db = sqlite3.connect(config['database']['file'])
                 self.db.row_factory = sqlite3.Row
-                self.roller = Roller()
+                self.roller = Roller(self.db)
+                game = self.get_game_info(kwargs['guild_id'], kwargs['channel_id'])
 
                 if kwargs['data']['name'] == 'info':
-                    game = self.get_game_info(kwargs['guild_id'], kwargs['channel_id'])
                     response = self.info(game, kwargs['channel_id'])
                 elif kwargs['data']['name'] == 'pin':
                     response = DiscordResponse('Pin command not yet implemented.')
                 elif kwargs['data']['name'] == 'comp':
-                    game = self.get_game_info(kwargs['guild_id'], kwargs['channel_id'])
                     response = self.comp(game, kwargs['data']['options'])
                 elif kwargs['data']['name'] == 'pp':
-                    game = self.get_game_info(kwargs['guild_id'], kwargs['channel_id'])
                     response = self.pp(game, kwargs['data']['options'])
                 elif kwargs['data']['name'] == 'roll':
-                    game = self.get_game_info(kwargs['guild_id'], kwargs['channel_id'])
                     response = self.roll(game, kwargs['data']['options'])
                 elif kwargs['data']['name'] == 'pool':
-                    game = self.get_game_info(kwargs['guild_id'], kwargs['channel_id'])
                     response = self.pool(game, kwargs['data']['options'])
+                elif kwargs['data']['name'] == 'stress':
+                    response = self.stress(game, kwargs['data']['options'])
+                elif kwargs['data']['name'] == 'asset':
+                    response = self.asset(game, kwargs['data']['options'])
+                elif kwargs['data']['name'] == 'xp':
+                    response = self.xp(game, kwargs['data']['options'])
+                elif kwargs['data']['name'] == 'clean':
+                    response = self.clean(game)
+                elif kwargs['data']['name'] == 'report':
+                    response = self.report()
+                elif kwargs['data']['name'] == 'option':
+                    response = self.option(game, kwargs['data']['options'])
                 else:
-                    response = DiscordResponse(UNEXPECTED_ERROR)
+                    response = DiscordResponse(UNKNOWN_COMMAND_ERROR)
         else:
             raise AccessDenied()
                 
@@ -1091,6 +1122,152 @@ class Default(Controller):
                 output = temp_pool.roll(self.roller, suggest_best)
             else:
                 raise CortexError(INSTRUCTION_ERROR, options[0]['name'], 'pool')
+            return DiscordResponse(output)
+        except CortexError as err:
+            return DiscordResponse(err)
+        except:
+            logging.error(traceback.format_exc())
+            return DiscordResponse(UNEXPECTED_ERROR)
+
+    def stress(self, game, options):
+        logging.debug("stress command invoked")
+        try:
+            output = ''
+            update_pin = False
+            game.update_activity()
+            dice = None
+            owner_name = None
+            stress_name = UNTYPED_STRESS
+            for option in options[0]['options']:
+                if option['name'] == 'name':
+                    owner_name = capitalize_words(option['value'])
+                elif option['name'] == 'type':
+                    stress_name = capitalize_words(option['value'])
+                elif option['name'] == 'dice':
+                    dice = parse_string_into_dice(option['value'])
+            if options[0]['name'] == 'add':
+                if len(dice) > 1:
+                    raise CortexError(DIE_EXCESS_ERROR)
+                elif dice[0].qty > 1:
+                    raise CortexError(DIE_EXCESS_ERROR)
+                output = '{0} Stress for {1}'.format(game.stress.add(owner_name, stress_name, dice[0]), owner_name)
+            elif options[0]['name'] == 'remove':
+                output = '{0} Stress for {1}'.format(game.stress.remove(owner_name, stress_name), owner_name)
+            elif options[0]['name'] == 'stepup':
+                output = '{0} Stress for {1}'.format(game.stress.step_up(owner_name, stress_name), owner_name)
+            elif options[0]['name'] == 'stepdown':
+                output = '{0} Stress for {1}'.format(game.stress.step_down(owner_name, stress_name), owner_name)
+            elif options[0]['name'] == 'clear':
+                output = game.stress.clear(owner_name)
+            else:
+                raise CortexError(INSTRUCTION_ERROR, options[0]['name'], 'stress')
+            return DiscordResponse(output)
+        except CortexError as err:
+            return DiscordResponse(err)
+        except:
+            logging.error(traceback.format_exc())
+            return DiscordResponse(UNEXPECTED_ERROR)
+
+    def asset(self, game, options):
+        logging.debug("asset command invoked")
+        output = ''
+        try:
+            output = ''
+            game.update_activity()
+            asset_name = capitalize_words(options[0]['options'][0]['value'])
+            if len(options[0]['options']) > 1:
+                dice = parse_string_into_dice(options[0]['options'][1]['value'])
+            if options[0]['name'] == 'add':
+                if len(dice) > 1:
+                    raise CortexError(DIE_EXCESS_ERROR)
+                elif dice[0].qty > 1:
+                    raise CortexError(DIE_EXCESS_ERROR)
+                output = game.assets.add(name, dice[0])
+            elif options[0]['name'] == 'remove':
+                output = game.assets.remove(name)
+            elif options[0]['name'] == 'stepup':
+                output = game.assets.step_up(name)
+            elif options[0]['name'] == 'stepdown':
+                output = game.assets.step_down(name)
+            else:
+                raise CortexError(INSTRUCTION_ERROR, options[0]['name'], 'asset')
+            return DiscordResponse(output)
+        except CortexError as err:
+            return DiscordResponse(err)
+        except:
+            logging.error(traceback.format_exc())
+            return DiscordResponse(UNEXPECTED_ERROR)
+
+    def xp(self, game, options):
+        logging.debug("xp command invoked")
+        try:
+            output = ''
+            game.update_activity()
+            xp_name = capitalize_words(options[0]['options'][0]['value'])
+            qty = 1
+            if len(options[0]['options']) > 1:
+                qty = options[0]['options'][1]['value']
+            if options[0]['name'] == 'add':
+                output = 'Experience points for ' + game.xp.add(xp_name, qty)
+            elif options[0]['name'] == 'remove':
+                output = 'Experience points for ' + game.xp.remove(xp_name, qty)
+            elif options[0]['name'] == 'clear':
+                output = game.xp.clear(xp_name)
+            else:
+                raise CortexError(INSTRUCTION_ERROR, options[0]['name'], 'xp')
+            return DiscordResponse(output)
+        except CortexError as err:
+            return DiscordResponse(err)
+        except:
+            logging.error(traceback.format_exc())
+            return DiscordResponse(UNEXPECTED_ERROR)
+
+
+    def clean(self, game):
+        logging.debug("clean command invoked")
+        try:
+            game.update_activity()
+            game.clean()
+            return DiscordResponse('Cleaned up all game information.')
+        except CortexError as err:
+            return DiscordResponse(err)
+        except:
+            logging.error(traceback.format_exc())
+            return DiscordResponse(UNEXPECTED_ERROR)
+
+    def report(self):
+        logging.debug("report command invoked")
+        try:
+            output = '**CortexPal Usage Report**\n'
+            output += self.roller.output()
+            return DiscordResponse(output)
+        except CortexError as err:
+            return DiscordResponse(err)
+        except:
+            logging.error(traceback.format_exc())
+            return DiscordResponse(UNEXPECTED_ERROR)
+
+    def option(self, game, options):
+        game.update_activity()
+        output = 'No such option.'
+
+        try:
+            argument = options[0]['options'][0]['value']
+            if options[0]['name'] == BEST_OPTION:
+                game.set_option(BEST_OPTION, argument)
+                output = 'Option to suggest best total and effect is now {0}.'.format(argument)
+            elif options[0]['name'] == JOIN_OPTION:
+                if options[0]['name'][0]['name'] == 'switch':
+                    if argument == 'on':
+                        game.set_option(JOIN_OPTION, 'on')
+                        output = 'Other channels may now join this channel.'
+                    elif argument == 'off':
+                        game.set_option(JOIN_OPTION, 'off')
+                        output = 'This channel now does not join or accept joins from other channels.'
+                else:
+                    game.set_option(JOIN_OPTION, argument)
+                    joined_game = self.get_game_info(ctx)
+                    output = 'Joining the #{0} channel.'.format(argument)
             return DiscordResponse(output)
         except CortexError as err:
             return DiscordResponse(err)
