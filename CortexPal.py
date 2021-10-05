@@ -1,9 +1,11 @@
 # TODO
 # What do we pass to command functions? DB? Cursor? Game object? Roller?
 # Should the command functions just return a string?
+# Required permissions = bot, application.commands, manage messages
 
 from endpoints import Controller, AccessDenied
 from discord_interactions import verify_key, InteractionType, InteractionResponseType
+import requests
 import logging
 import json
 import configparser
@@ -15,7 +17,9 @@ import re
 import uuid
 from datetime import date, datetime, timedelta, timezone
 
-PURGE_DAYS = 180
+MESSAGE_URL = 'https://discord.com/api/v8/channels/{0}/messages'
+PATCH_URL = 'https://discord.com/api/v8/channels/{0}/messages/{1}'
+PIN_URL = 'https://discord.com/api/v8/channels/{0}/pins/{1}'
 
 DICE_EXPRESSION = re.compile('(\d*(d|D))?(4|6|8|10|12)')
 DIE_SIZES = [4, 6, 8, 10, 12]
@@ -109,39 +113,26 @@ def fetch_all_dice_for_parent(db_parent):
             fetching = False
     return dice
 
-def purge():
-    """Scan for old unused games and remove them."""
-
-    logging.info('Running the purge')
-    purge_time = datetime.now(timezone.utc) - timedelta(days=PURGE_DAYS)
-    games_to_purge = []
-    cursor.execute('SELECT * FROM GAME WHERE ACTIVITY<:purge_time', {'purge_time':purge_time})
-    fetching = True
-    while fetching:
-        row = cursor.fetchone()
-        if row:
-            games_to_purge.append(row['GUID'])
-        else:
-            fetching = False
-    for game_guid in games_to_purge:
-        cursor.execute('DELETE FROM GAME_OPTIONS WHERE PARENT_GUID=:guid', {'guid':game_guid})
-        cursor.execute('SELECT * FROM DICE_COLLECTION WHERE PARENT_GUID=:guid', {'guid':game_guid})
-        collections = []
-        fetching = True
-        while fetching:
-            row = cursor.fetchone()
-            if row:
-                collections.append(row['GUID'])
-            else:
-                fetching = False
-        for collection_guid in collections:
-            cursor.execute('DELETE FROM DIE WHERE PARENT_GUID=:guid', {'guid':collection_guid})
-        cursor.execute('DELETE FROM DIE WHERE PARENT_GUID=:guid', {'guid':game_guid})
-        cursor.execute('DELETE FROM DICE_COLLECTION WHERE PARENT_GUID=:guid', {'guid':game_guid})
-        cursor.execute('DELETE FROM RESOURCE WHERE PARENT_GUID=:guid', {'guid':game_guid})
-        cursor.execute('DELETE FROM GAME WHERE GUID=:guid', {'guid':game_guid})
-        db.commit()
-    logging.info('Deleted %d games', len(games_to_purge))
+def update_pin(content, channel_id, prior_message=None):
+    returned_message_id = None
+    headers = {
+        "Authorization": "Bot {}".format(config['discord']['token'])
+    }
+    message_json = {
+        "content": content
+    }
+    if prior_message:
+        r = requests.patch(PATCH_URL.format(channel_id, prior_message), json=message_json)
+        logging.debug(r.text)
+        returned_message_id = prior_message
+    else:
+        r = requests.post(MESSAGE_URL.format(channel_id), headers=headers, json=message_json)
+        logging.debug(r.text)
+        message_response = json.loads(r.text)
+        returned_message_id = message_response['id']
+        r = requests.put(PIN_URL.format(channel_id, returned_message_id), headers=headers)
+        logging.debug(r.text)
+    return returned_message_id
 
 class Die:
     """A single die, or a set of dice of the same size."""
@@ -956,7 +947,7 @@ class Default(Controller):
                 if kwargs['data']['name'] == 'info':
                     response = self.info(game, kwargs['channel_id'])
                 elif kwargs['data']['name'] == 'pin':
-                    response = DiscordResponse('Pin command not yet implemented.')
+                    response = self.pin(game, kwargs['channel_id'])
                 elif kwargs['data']['name'] == 'comp':
                     response = self.comp(game, kwargs['data']['options'])
                 elif kwargs['data']['name'] == 'pp':
@@ -1030,9 +1021,22 @@ class Default(Controller):
             logging.error(traceback.format_exc())
             return DiscordResponse(UNEXPECTED_ERROR)
 
+    def pin(self, game, origin_channel):
+        try:
+            game.update_activity()
+            output = game.output()
+            game.pinned_message = update_pin(output, origin_channel)
+            return DiscordResponse('Game information pinned.')
+        except CortexError as err:
+            return DiscordResponse(err)
+        except:
+            logging.error(traceback.format_exc())
+            return DiscordResponse(UNEXPECTED_ERROR)
+
     def comp(self, game, options):
         logging.debug("comp command invoked")
         try:
+            update_pin = True
             output = ''
             game.update_activity()
             comp_name = capitalize_words(options[0]['options'][0]['value'])
@@ -1052,7 +1056,10 @@ class Default(Controller):
             elif args[0] in DOWN_SYNONYMS:
                 output = game.complications.step_down(comp_name)
             else:
+                update_pin = False
                 raise CortexError(INSTRUCTION_ERROR, options[0], 'comp')
+            if update_pin and game.pinned_message:
+                update_pin(game.output(), game.pinned_message)
             return DiscordResponse(output)
         except CortexError as err:
             return DiscordResponse(err)
