@@ -17,9 +17,9 @@ import re
 import uuid
 from datetime import date, datetime, timedelta, timezone
 
-MESSAGE_URL = 'https://discord.com/api/v8/channels/{0}/messages'
-PATCH_URL = 'https://discord.com/api/v8/channels/{0}/messages/{1}'
-PIN_URL = 'https://discord.com/api/v8/channels/{0}/pins/{1}'
+MESSAGE_URL = 'https://discord.com/api/v9/channels/{0}/messages'
+PATCH_URL = 'https://discord.com/api/v9/channels/{0}/messages/{1}'
+PIN_URL = 'https://discord.com/api/v9/channels/{0}/pins/{1}'
 
 DICE_EXPRESSION = re.compile('(\d*(d|D))?(4|6|8|10|12)')
 DIE_SIZES = [4, 6, 8, 10, 12]
@@ -112,27 +112,6 @@ def fetch_all_dice_for_parent(db_parent):
         else:
             fetching = False
     return dice
-
-def update_pin(content, channel_id, prior_message=None):
-    returned_message_id = None
-    headers = {
-        "Authorization": "Bot {}".format(config['discord']['token'])
-    }
-    message_json = {
-        "content": content
-    }
-    if prior_message:
-        r = requests.patch(PATCH_URL.format(channel_id, prior_message), json=message_json)
-        logging.debug(r.text)
-        returned_message_id = prior_message
-    else:
-        r = requests.post(MESSAGE_URL.format(channel_id), headers=headers, json=message_json)
-        logging.debug(r.text)
-        message_response = json.loads(r.text)
-        returned_message_id = message_response['id']
-        r = requests.put(PIN_URL.format(channel_id, returned_message_id), headers=headers)
-        logging.debug(r.text)
-    return returned_message_id
 
 class Die:
     """A single die, or a set of dice of the same size."""
@@ -772,6 +751,7 @@ class CortexGame:
             self.db.commit()
         else:
             self.db_guid = row['GUID']
+            self.pinned_message = row['PIN']
         self.new()
 
     def new(self):
@@ -855,6 +835,28 @@ class CortexGame:
     def update_activity(self):
         self.cursor.execute('UPDATE GAME SET ACTIVITY=:now WHERE GUID=:db_guid', {'now':datetime.now(timezone.utc), 'db_guid':self.db_guid})
         self.db.commit()
+
+    def update_pin(self, content):
+        logging.debug('updating the pinned message')
+        headers = {
+            "Authorization": "Bot {}".format(config['discord']['token'])
+        }
+        message_json = {
+            "content": content
+        }
+        if self.pinned_message:
+            r = requests.patch(PATCH_URL.format(self.channel, self.pinned_message), json=message_json)
+            logging.debug(r.text)
+        else:
+            r = requests.post(MESSAGE_URL.format(self.channel), headers=headers, json=message_json)
+            message_response = json.loads(r.text)
+            self.pinned_message = message_response['id']
+            r = requests.put(PIN_URL.format(self.channel, self.pinned_message), headers=headers)
+            self.cursor.execute('UPDATE GAME SET PIN=:message WHERE GUID=:db_guid', {'message':self.pinned_message, 'db_guid':self.db_guid})
+            self.db.commit()
+
+    def has_pin(self):
+        return self.pinned_message != None
 
 class Roller:
     """Generates random die rolls and remembers the frequency of results."""
@@ -947,7 +949,7 @@ class Default(Controller):
                 if kwargs['data']['name'] == 'info':
                     response = self.info(game, kwargs['channel_id'])
                 elif kwargs['data']['name'] == 'pin':
-                    response = self.pin(game, kwargs['channel_id'])
+                    response = self.pin(game)
                 elif kwargs['data']['name'] == 'comp':
                     response = self.comp(game, kwargs['data']['options'])
                 elif kwargs['data']['name'] == 'pp':
@@ -1021,11 +1023,11 @@ class Default(Controller):
             logging.error(traceback.format_exc())
             return DiscordResponse(UNEXPECTED_ERROR)
 
-    def pin(self, game, origin_channel):
+    def pin(self, game):
         try:
             game.update_activity()
             output = game.output()
-            game.pinned_message = update_pin(output, origin_channel)
+            game.update_pin(output)
             return DiscordResponse('Game information pinned.')
         except CortexError as err:
             return DiscordResponse(err)
@@ -1051,15 +1053,15 @@ class Default(Controller):
                 output = game.complications.add(comp_name, dice[0])
             elif options[0]['name'] == 'remove':
                 output = game.complications.remove(comp_name)
-            elif args[0] in UP_SYNONYMS:
+            elif options[0]['name'] == 'stepup':
                 output = game.complications.step_up(comp_name)
-            elif args[0] in DOWN_SYNONYMS:
+            elif options[0]['name'] == 'stepdown':
                 output = game.complications.step_down(comp_name)
             else:
                 update_pin = False
                 raise CortexError(INSTRUCTION_ERROR, options[0], 'comp')
-            if update_pin and game.pinned_message:
-                update_pin(game.output(), game.pinned_message)
+            if update_pin and game.has_pin():
+                game.update_pin(game.output())
             return DiscordResponse(output)
         except CortexError as err:
             return DiscordResponse(err)
