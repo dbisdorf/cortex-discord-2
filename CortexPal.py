@@ -1,8 +1,9 @@
 # TODO
 # What do we pass to command functions? DB? Cursor? Game object? Roller?
-# Should the command functions just return a string?
+# Should the command functions just return a string? instead of an object
 # Required permissions = bot, application.commands, manage messages
 # Should cleaning the game remove the pin? probably it should
+# Comments / documentation
 
 from endpoints import Controller, AccessDenied
 from discord_interactions import verify_key, InteractionType, InteractionResponseType
@@ -264,9 +265,9 @@ class NamedDice:
         if not name in self.dice:
             die.store_in_db(self.db, self)
             self.dice[name] = die
-            return 'New: ' + self.output(name)
+            return 'New {0}: {1}'.format(self.category, self.output(name))
         elif self.dice[name].is_max():
-            return 'This would step up beyond {0}'.format(self.output(name))
+            return 'This would step up the {0} beyond {1}.'.format(self.category, self.output(name))
         else:
             self.dice[name].combine(die)
             return 'Raised to ' + self.output(name)
@@ -276,7 +277,7 @@ class NamedDice:
 
         if not name in self.dice:
             raise CortexError(NOT_EXIST_ERROR, self.category)
-        output = 'Removed: ' + self.output(name)
+        output = 'Removed {0}: {1}'.format(self.category, self.output(name))
         self.dice[name].remove_from_db()
         del self.dice[name]
         return output
@@ -287,7 +288,7 @@ class NamedDice:
         if not name in self.dice:
             raise CortexError(NOT_EXIST_ERROR, self.category)
         if self.dice[name].is_max():
-            return 'This would step up beyond {0}'.format(self.output(name))
+            return 'This would step up the {0} beyond {1}.'.format(self.category, self.output(name))
         self.dice[name].step_up()
         return 'Stepped up to ' + self.output(name)
 
@@ -298,10 +299,10 @@ class NamedDice:
             raise CortexError(NOT_EXIST_ERROR, self.category)
         if self.dice[name].size == 4:
             self.remove(name)
-            return 'Stepped down and removed: ' + name
+            return 'Stepped down and removed {0}: {1}'.format(self.category, name)
         else:
             self.dice[name].step_down()
-            return 'Stepped down to ' + self.output(name)
+            return 'Stepped down {0} to {1}'.format(self.category, self.output(name))
 
     def get_all_names(self):
         """Identify the names of all the dice in this object."""
@@ -1205,13 +1206,13 @@ class Default(Controller):
                     raise CortexError(DIE_EXCESS_ERROR)
                 elif dice[0].qty > 1:
                     raise CortexError(DIE_EXCESS_ERROR)
-                output = game.assets.add(name, dice[0])
+                output = game.assets.add(asset_name, dice[0])
             elif options[0]['name'] == 'remove':
-                output = game.assets.remove(name)
+                output = game.assets.remove(asset_name)
             elif options[0]['name'] == 'stepup':
-                output = game.assets.step_up(name)
+                output = game.assets.step_up(asset_name)
             elif options[0]['name'] == 'stepdown':
-                output = game.assets.step_down(name)
+                output = game.assets.step_down(asset_name)
             else:
                 update_pin = False
                 raise CortexError(INSTRUCTION_ERROR, options[0]['name'], 'asset')
