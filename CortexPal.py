@@ -2,6 +2,7 @@
 # What do we pass to command functions? DB? Cursor? Game object? Roller?
 # Should the command functions just return a string?
 # Required permissions = bot, application.commands, manage messages
+# Should cleaning the game remove the pin? probably it should
 
 from endpoints import Controller, AccessDenied
 from discord_interactions import verify_key, InteractionType, InteractionResponseType
@@ -194,6 +195,7 @@ class Die:
         self.qty = new_qty
         if self.db_guid:
             self.cursor.execute('UPDATE DIE SET QTY=:qty WHERE GUID=:guid', {'qty':self.qty, 'guid':self.db_guid})
+            self.db.commit()
 
     def is_max(self):
         """Identify whether the Die is at the maximum allowed size."""
@@ -836,7 +838,7 @@ class CortexGame:
         self.cursor.execute('UPDATE GAME SET ACTIVITY=:now WHERE GUID=:db_guid', {'now':datetime.now(timezone.utc), 'db_guid':self.db_guid})
         self.db.commit()
 
-    def update_pin(self, content):
+    def pin_info(self, content, new=False):
         logging.debug('updating the pinned message')
         headers = {
             "Authorization": "Bot {}".format(config['discord']['token'])
@@ -844,8 +846,8 @@ class CortexGame:
         message_json = {
             "content": content
         }
-        if self.pinned_message:
-            r = requests.patch(PATCH_URL.format(self.channel, self.pinned_message), json=message_json)
+        if not new and self.pinned_message:
+            r = requests.patch(PATCH_URL.format(self.channel, self.pinned_message), headers=headers, json=message_json)
             logging.debug(r.text)
         else:
             r = requests.post(MESSAGE_URL.format(self.channel), headers=headers, json=message_json)
@@ -1027,7 +1029,7 @@ class Default(Controller):
         try:
             game.update_activity()
             output = game.output()
-            game.update_pin(output)
+            game.pin_info(output, True)
             return DiscordResponse('Game information pinned.')
         except CortexError as err:
             return DiscordResponse(err)
@@ -1061,7 +1063,7 @@ class Default(Controller):
                 update_pin = False
                 raise CortexError(INSTRUCTION_ERROR, options[0], 'comp')
             if update_pin and game.has_pin():
-                game.update_pin(game.output())
+                game.pin_info(game.output())
             return DiscordResponse(output)
         except CortexError as err:
             return DiscordResponse(err)
@@ -1073,7 +1075,7 @@ class Default(Controller):
         logging.debug("pp command invoked")
         try:
             output = ''
-            update_pin = False
+            update_pin = True
             game.update_activity()
             char_name = capitalize_words(options[0]['options'][0]['value'])
             if options[0]['name'] == 'add':
@@ -1085,7 +1087,10 @@ class Default(Controller):
             elif options[0]['name'] == 'clear':
                 output = game.plot_points.clear(char_name)
             else:
+                update_pin = False
                 raise CortexError(INSTRUCTION_ERROR, options[0], 'pp')
+            if update_pin and game.has_pin():
+                game.pin_info(game.output())
             return DiscordResponse(output)
         except CortexError as err:
             return DiscordResponse(err)
@@ -1112,6 +1117,7 @@ class Default(Controller):
         logging.debug("pool command invoked")
         try:
             output = ''
+            update_pin = True
             game.update_activity()
             suggest_best = game.get_option_as_bool(BEST_OPTION)
             pool_name = capitalize_words(options[0]['options'][0]['value'])
@@ -1125,12 +1131,16 @@ class Default(Controller):
             elif options[0]['name'] == 'clear':
                 output = game.pools.clear(pool_name)
             elif options[0]['name'] == 'roll':
+                update_pin = False
                 temp_pool = game.pools.temporary_copy(pool_name)
                 if dice:
                     temp_pool.add(dice)
                 output = temp_pool.roll(self.roller, suggest_best)
             else:
+                update_pin = False
                 raise CortexError(INSTRUCTION_ERROR, options[0]['name'], 'pool')
+            if update_pin and game.has_pin():
+                game.pin_info(game.output())
             return DiscordResponse(output)
         except CortexError as err:
             return DiscordResponse(err)
@@ -1142,7 +1152,7 @@ class Default(Controller):
         logging.debug("stress command invoked")
         try:
             output = ''
-            update_pin = False
+            update_pin = True
             game.update_activity()
             dice = None
             owner_name = None
@@ -1169,7 +1179,10 @@ class Default(Controller):
             elif options[0]['name'] == 'clear':
                 output = game.stress.clear(owner_name)
             else:
+                update_pin = False
                 raise CortexError(INSTRUCTION_ERROR, options[0]['name'], 'stress')
+            if update_pin and game.has_pin():
+                game.pin_info(game.output())
             return DiscordResponse(output)
         except CortexError as err:
             return DiscordResponse(err)
@@ -1182,6 +1195,7 @@ class Default(Controller):
         output = ''
         try:
             output = ''
+            update_pin = True
             game.update_activity()
             asset_name = capitalize_words(options[0]['options'][0]['value'])
             if len(options[0]['options']) > 1:
@@ -1199,7 +1213,10 @@ class Default(Controller):
             elif options[0]['name'] == 'stepdown':
                 output = game.assets.step_down(name)
             else:
+                update_pin = False
                 raise CortexError(INSTRUCTION_ERROR, options[0]['name'], 'asset')
+            if update_pin and game.has_pin():
+                game.pin_info(game.output())
             return DiscordResponse(output)
         except CortexError as err:
             return DiscordResponse(err)
@@ -1211,6 +1228,7 @@ class Default(Controller):
         logging.debug("xp command invoked")
         try:
             output = ''
+            update_pin = True
             game.update_activity()
             xp_name = capitalize_words(options[0]['options'][0]['value'])
             qty = 1
@@ -1223,7 +1241,10 @@ class Default(Controller):
             elif options[0]['name'] == 'clear':
                 output = game.xp.clear(xp_name)
             else:
+                update_pin = False
                 raise CortexError(INSTRUCTION_ERROR, options[0]['name'], 'xp')
+            if update_pin and game.has_pin():
+                game.pin_info(game.output())
             return DiscordResponse(output)
         except CortexError as err:
             return DiscordResponse(err)
