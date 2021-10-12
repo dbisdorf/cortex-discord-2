@@ -425,7 +425,10 @@ class DicePool:
     def roll(self, roller, suggest_best=False):
         """Roll all the dice in the pool, and return a formatted summary of the results."""
 
-        output = ''
+        if self.group:
+            output = 'Rolling: {0} pool\n'.format(self.group)
+        else:
+            output = 'Rolling: {0}\n'.format(self.output())
         separator = ''
         rolls = []
         for die in self.dice:
@@ -1106,8 +1109,7 @@ class Default(Controller):
             suggest_best = game.get_option_as_bool(BEST_OPTION)
             dice = parse_string_into_dice(options[0]['value'])
             pool = DicePool(None, incoming_dice=dice)
-            echo_line = 'Rolling: {0}\n'.format(pool.output())
-            return DiscordResponse(echo_line + pool.roll(self.roller, suggest_best))
+            return DiscordResponse(pool.roll(self.roller, suggest_best))
         except CortexError as err:
             return DiscordResponse(err)
         except:
