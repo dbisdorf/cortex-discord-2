@@ -4,6 +4,7 @@
 # Required permissions = bot, application.commands, manage messages
 # Should cleaning the game remove the pin? probably it should
 # Comments / documentation
+# End feedback with periods?
 
 from endpoints import Controller, AccessDenied
 from discord_interactions import verify_key, InteractionType, InteractionResponseType
@@ -290,7 +291,7 @@ class NamedDice:
         if self.dice[name].is_max():
             return 'This would step up the {0} beyond {1}.'.format(self.category, self.output(name))
         self.dice[name].step_up()
-        return 'Stepped up to ' + self.output(name)
+        return 'Stepped up {0} to {1}'.format(self.category, self.output(name))
 
     def step_down(self, name):
         """Step down the die with a given name."""
@@ -1084,10 +1085,10 @@ class Default(Controller):
             char_name = capitalize_words(options[0]['options'][0]['value'])
             if options[0]['name'] == 'add':
                 qty = options[0]['options'][1]['value']
-                output = 'Plot points for ' + game.plot_points.add(char_name, qty)
+                output = 'Plot points for {0} (added {1})'.format(game.plot_points.add(char_name, qty), qty)
             elif options[0]['name'] == 'remove':
                 qty = options[0]['options'][1]['value']
-                output = 'Plot points for ' + game.plot_points.remove(char_name, qty)
+                output = 'Plot points for {0} (removed {1})'.format(game.plot_points.remove(char_name, qty), qty)
             elif options[0]['name'] == 'clear':
                 output = game.plot_points.clear(char_name)
             else:
@@ -1238,9 +1239,9 @@ class Default(Controller):
             if len(options[0]['options']) > 1:
                 qty = options[0]['options'][1]['value']
             if options[0]['name'] == 'add':
-                output = 'Experience points for ' + game.xp.add(xp_name, qty)
+                output = 'Experience points for {0} (added {1})'.format(game.xp.add(xp_name, qty), qty)
             elif options[0]['name'] == 'remove':
-                output = 'Experience points for ' + game.xp.remove(xp_name, qty)
+                output = 'Experience points for {0} (removed {1})'.format(game.xp.remove(xp_name, qty), qty)
             elif options[0]['name'] == 'clear':
                 output = game.xp.clear(xp_name)
             else:
