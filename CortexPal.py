@@ -116,6 +116,9 @@ def fetch_all_dice_for_parent(db_parent):
             fetching = False
     return dice
 
+def list_of_dice(dice):
+    return ' '.join([d.output() for d in dice if d])
+
 class Die:
     """A single die, or a set of dice of the same size."""
 
@@ -393,7 +396,7 @@ class DicePool:
                 self.dice[index] = die
                 if self.db_parent and not die.db_parent:
                     die.store_in_db(self.db, self)
-        return self.output()
+        return '{0} (added {1})'.format(self.output(), list_of_dice(dice))
 
     def remove(self, dice):
         """Remove dice from the pool."""
@@ -411,7 +414,7 @@ class DicePool:
                     self.dice[index] = None
             else:
                 raise CortexError(DIE_NONE_ERROR, die.size)
-        return self.output()
+        return '{0} (removed {1})'.format(self.output(), list_of_dice(dice))
 
     def temporary_copy(self):
         """Return a temporary, non-persisted copy of this dice pool."""
@@ -484,11 +487,13 @@ class DicePool:
 
         if self.is_empty():
             return 'empty'
+        """
         output = ''
         for die in self.dice:
             if die:
                 output += die.output() + ' '
-        return output
+        """
+        return list_of_dice(self.dice)
 
 class DicePools:
     """A collection of DicePool objects."""
@@ -532,7 +537,7 @@ class DicePools:
             self.pools[group] = DicePool(group)
             self.pools[group].store_in_db(self.db, self.db_parent)
         self.pools[group].add(dice)
-        return '{0}: {1}'.format(group, self.pools[group].output())
+        return '{0}: {1} (added {2})'.format(group, self.pools[group].output(), list_of_dice(dice))
 
     def remove(self, group, dice):
         """Remove some dice from a pool with a given name."""
@@ -540,7 +545,7 @@ class DicePools:
         if not group in self.pools:
             raise CortexError(NOT_EXIST_ERROR, 'pool')
         self.pools[group].remove(dice)
-        return '{0}: {1}'.format(group, self.pools[group].output())
+        return '{0}: {1} (removed {2})'.format(group, self.pools[group].output(), list_of_dice(dice))
 
     def clear(self, group):
         """Remove one entire pool."""
