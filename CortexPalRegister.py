@@ -288,15 +288,16 @@ stress_json = {
                     "required": True
                 },
                 {
-                    "name": "dice",
-                    "description": "Die size.",
+                    "name": "type",
+                    "description": "The type of stress.",
                     "type": 3,
                     "required": True
                 },
                 {
-                    "name": "type",
-                    "description": "The type of stress.",
-                    "type": 3
+                    "name": "dice",
+                    "description": "Die size.",
+                    "type": 3,
+                    "required": True
                 }
             ]
         },
@@ -314,7 +315,8 @@ stress_json = {
                 {
                     "name": "type",
                     "description": "The type of stress.",
-                    "type": 3
+                    "type": 3,
+                    "required": True
                 }
             ]
         },
@@ -332,7 +334,8 @@ stress_json = {
                 {
                     "name": "type",
                     "description": "The type of stress.",
-                    "type": 3
+                    "type": 3,
+                    "required": True
                 }
             ]
         },
@@ -350,7 +353,8 @@ stress_json = {
                 {
                     "name": "type",
                     "description": "The type of stress.",
-                    "type": 3
+                    "type": 3,
+                    "required": True
                 }
             ]
         },
@@ -595,4 +599,14 @@ r = requests.post(url, headers=headers, json=option_json)
 print(r.text)
 time.sleep(5)
 
+help_json = {
+    "name": "help",
+    "type": 1,
+    "description": "List the commands that CortexPal2000 supports."
+}
+
+print("Submitting help")
+r = requests.post(url, headers=headers, json=help_json)
+print(r.text)
+time.sleep(5)
 

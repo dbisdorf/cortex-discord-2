@@ -5,6 +5,9 @@
 # Should cleaning the game remove the pin? probably it should
 # Comments / documentation
 # End feedback with periods?
+# Stress type mandatory - after character name
+# Can I feed stuff to the autosuggest (like "Physical" stress if it's in the game?)
+# Test allowing trait names in die rolls
 
 from endpoints import Controller, AccessDenied
 from discord_interactions import verify_key, InteractionType, InteractionResponseType
@@ -47,7 +50,22 @@ BEST_OPTION = 'best'
 JOIN_OPTION = 'join'
 
 GAME_INFO_HEADER = '**Cortex Game Information**'
-ABOUT_TEXT = 'CortexPal2000 v1.0.0: a Discord bot for Cortex Prime RPG players.'
+HELP_TEXT = (
+    'CortexPal2000 v1.0.0: a Discord bot for Cortex Prime RPG players.'
+    'asset  Adjust assets.'
+    'clean  Reset all game data for a channel.'
+    'comp   Adjust complications.'
+    'info   Display all game information.'
+    'option Change the bot\'s optional behavior.'
+    'pin    Pin a message to the channel to hold game information.'
+    'pool   Adjust dice pools.'
+    'pp     Adjust plot points.'
+    'report Report the bot\'s statistics.'
+    'roll   Roll some dice.'
+    'stress Adjust stress.'
+    'xp     Award experience points.'
+    'help   Shows this message'
+)
 
 # Read configuration.
 
@@ -982,6 +1000,8 @@ class Default(Controller):
                     response = self.report()
                 elif kwargs['data']['name'] == 'option':
                     response = self.option(game, kwargs['data']['options'])
+                elif kwargs['data']['name'] == 'help':
+                    response = self.help()
                 else:
                     response = DiscordResponse(UNKNOWN_COMMAND_ERROR)
         else:
@@ -1314,3 +1334,5 @@ class Default(Controller):
             logging.error(traceback.format_exc())
             return DiscordResponse(UNEXPECTED_ERROR)
 
+    def help(self):
+        return DiscordResponse(HELP_TEXT)
