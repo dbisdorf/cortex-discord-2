@@ -8,11 +8,8 @@
 # I might not need some safety checks (like missing dice) because Discord enforces stuff
 
 # USER SUGGESTIONS
-# Stress type mandatory - after character name
-# Assign complications and assets to people
 # Can I feed stuff to the autosuggest (like "Physical" stress if it's in the game?)
 # Test allowing trait names in die rolls
-# Pool/roll command should give feedback showing which extra dice you added to the pool
 # Add option to keep 3+ dice for best total/effect suggestion
 
 from endpoints import Controller, AccessDenied
@@ -1177,6 +1174,8 @@ class Default(Controller):
                 if dice:
                     temp_pool.add(dice)
                 output = temp_pool.roll(self.roller, suggest_best)
+                if dice:
+                    output += '\n(added {0} for this roll)'.format(list_of_dice(dice))
             else:
                 update_pin = False
                 raise CortexError(INSTRUCTION_ERROR, options[0]['name'], 'pool')
