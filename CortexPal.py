@@ -6,6 +6,7 @@
 # Comments / documentation
 # End feedback with periods?
 # I might not need some safety checks (like missing dice) because Discord enforces stuff
+# remove debug messages
 
 # USER SUGGESTIONS
 # Can I feed stuff to the autosuggest (like "Physical" stress if it's in the game?)
@@ -29,6 +30,7 @@ from datetime import date, datetime, timedelta, timezone
 MESSAGE_URL = 'https://discord.com/api/v9/channels/{0}/messages'
 PATCH_URL = 'https://discord.com/api/v9/channels/{0}/messages/{1}'
 PIN_URL = 'https://discord.com/api/v9/channels/{0}/pins/{1}'
+UNPIN_URL = 'https://discord.com/api/v9/channels/{0}/pins/{1}'
 
 DICE_EXPRESSION = re.compile('(\d*(d|D))?(4|6|8|10|12)')
 DIE_SIZES = [4, 6, 8, 10, 12]
@@ -74,6 +76,10 @@ HELP_TEXT = (
 
 config = configparser.ConfigParser()
 config.read('cortexpal.ini')
+
+auth_request_headers = {
+    "Authorization": "Bot {}".format(config['discord']['token'])
+}
 
 # Set up logging.
 
@@ -807,6 +813,12 @@ class CortexGame:
         self.stress.remove_from_db()
         self.xp.remove_from_db()
 
+        if self.pinned_message:
+            r = requests.delete(UNPIN_URL.format(self.channel, self.pinned_message), headers=auth_request_headers)
+            logging.debug(r.text)
+            self.cursor.execute('UPDATE GAME SET PIN=NULL WHERE GUID=:db_guid', {'db_guid':self.db_guid})
+            self.db.commit()
+
     def output(self):
         """Return a report of all of the game's traits."""
 
@@ -871,20 +883,17 @@ class CortexGame:
 
     def pin_info(self, content, new=False):
         logging.debug('updating the pinned message')
-        headers = {
-            "Authorization": "Bot {}".format(config['discord']['token'])
-        }
         message_json = {
             "content": content
         }
         if not new and self.pinned_message:
-            r = requests.patch(PATCH_URL.format(self.channel, self.pinned_message), headers=headers, json=message_json)
+            r = requests.patch(PATCH_URL.format(self.channel, self.pinned_message), headers=auth_request_headers, json=message_json)
             logging.debug(r.text)
         else:
-            r = requests.post(MESSAGE_URL.format(self.channel), headers=headers, json=message_json)
+            r = requests.post(MESSAGE_URL.format(self.channel), headers=auth_request_headers, json=message_json)
             message_response = json.loads(r.text)
             self.pinned_message = message_response['id']
-            r = requests.put(PIN_URL.format(self.channel, self.pinned_message), headers=headers)
+            r = requests.put(PIN_URL.format(self.channel, self.pinned_message), headers=auth_request_headers)
             self.cursor.execute('UPDATE GAME SET PIN=:message WHERE GUID=:db_guid', {'message':self.pinned_message, 'db_guid':self.db_guid})
             self.db.commit()
 
