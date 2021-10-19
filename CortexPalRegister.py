@@ -46,13 +46,19 @@ comp_json = {
             "type": 1,
             "options": [
                 {
-                    "name": "name",
+                    "name": "who",
+                    "description": "Name of the character or player owning the complication.",
+                    "type": 3,
+                    "required": True
+                },
+                {
+                    "name": "what",
                     "description": "Complication name.",
                     "type": 3,
                     "required": True
                 },
                 {
-                    "name": "dice",
+                    "name": "die",
                     "description": "Die size.",
                     "type": 3,
                     "required": True
@@ -65,7 +71,13 @@ comp_json = {
             "type": 1,
             "options": [
                 {
-                    "name": "name",
+                    "name": "who",
+                    "description": "Name of the character or player owning the complication.",
+                    "type": 3,
+                    "required": True
+                },
+                {
+                    "name": "what",
                     "description": "Complication name.",
                     "type": 3,
                     "required": True
@@ -78,7 +90,13 @@ comp_json = {
             "type": 1,
             "options": [
                 {
-                    "name": "name",
+                    "name": "who",
+                    "description": "Name of the character or player owning the complication.",
+                    "type": 3,
+                    "required": True
+                },
+                {
+                    "name": "what",
                     "description": "Complication name.",
                     "type": 3,
                     "required": True
@@ -91,7 +109,13 @@ comp_json = {
             "type": 1,
             "options": [
                 {
-                    "name": "name",
+                    "name": "who",
+                    "description": "Name of the character or player owning the complication.",
+                    "type": 3,
+                    "required": True
+                },
+                {
+                    "name": "what",
                     "description": "Complication name.",
                     "type": 3,
                     "required": True
@@ -117,7 +141,7 @@ pp_json = {
             "type": 1,
             "options": [
                 {
-                    "name": "name",
+                    "name": "who",
                     "description": "Name of character or player.",
                     "type": 3,
                     "required": True
@@ -136,7 +160,7 @@ pp_json = {
             "type": 1,
             "options": [
                 {
-                    "name": "name",
+                    "name": "who",
                     "description": "Name of character or player.",
                     "type": 3,
                     "required": True
@@ -155,7 +179,7 @@ pp_json = {
             "type": 1,
             "options": [
                 {
-                    "name": "name",
+                    "name": "who",
                     "description": "Name of character or player.",
                     "type": 3,
                     "required": True
@@ -282,19 +306,19 @@ stress_json = {
             "type": 1,
             "options": [
                 {
-                    "name": "name",
+                    "name": "who",
                     "description": "Name of the character or player.",
                     "type": 3,
                     "required": True
                 },
                 {
-                    "name": "type",
+                    "name": "what",
                     "description": "The type of stress.",
                     "type": 3,
                     "required": True
                 },
                 {
-                    "name": "dice",
+                    "name": "die",
                     "description": "Die size.",
                     "type": 3,
                     "required": True
@@ -307,13 +331,13 @@ stress_json = {
             "type": 1,
             "options": [
                 {
-                    "name": "name",
+                    "name": "who",
                     "description": "Name of the character or player.",
                     "type": 3,
                     "required": True
                 },
                 {
-                    "name": "type",
+                    "name": "what",
                     "description": "The type of stress.",
                     "type": 3,
                     "required": True
@@ -326,13 +350,13 @@ stress_json = {
             "type": 1,
             "options": [
                 {
-                    "name": "name",
+                    "name": "who",
                     "description": "Name of the character or player.",
                     "type": 3,
                     "required": True
                 },
                 {
-                    "name": "type",
+                    "name": "what",
                     "description": "The type of stress.",
                     "type": 3,
                     "required": True
@@ -345,13 +369,13 @@ stress_json = {
             "type": 1,
             "options": [
                 {
-                    "name": "name",
+                    "name": "who",
                     "description": "Name of the character or player.",
                     "type": 3,
                     "required": True
                 },
                 {
-                    "name": "type",
+                    "name": "what",
                     "description": "The type of stress.",
                     "type": 3,
                     "required": True
@@ -364,7 +388,7 @@ stress_json = {
             "type": 1,
             "options": [
                 {
-                    "name": "name",
+                    "name": "who",
                     "description": "Name of the character or player.",
                     "type": 3,
                     "required": True
@@ -390,7 +414,13 @@ asset_json = {
             "type": 1,
             "options": [
                 {
-                    "name": "name",
+                    "name": "who",
+                    "description": "The character or player owning the asset.",
+                    "type": 3,
+                    "required": True
+                },
+                {
+                    "name": "what",
                     "description": "The name of the asset.",
                     "type": 3,
                     "required": True
@@ -409,7 +439,13 @@ asset_json = {
             "type": 1,
             "options": [
                 {
-                    "name": "name",
+                    "name": "who",
+                    "description": "The character or player owning the asset.",
+                    "type": 3,
+                    "required": True
+                },
+                {
+                    "name": "what",
                     "description": "The name of the asset.",
                     "type": 3,
                     "required": True
@@ -422,7 +458,13 @@ asset_json = {
             "type": 1,
             "options": [
                 {
-                    "name": "name",
+                    "name": "who",
+                    "description": "The character or player owning the asset.",
+                    "type": 3,
+                    "required": True
+                },
+                {
+                    "name": "what",
                     "description": "The name of the asset.",
                     "type": 3,
                     "required": True
@@ -435,7 +477,13 @@ asset_json = {
             "type": 1,
             "options": [
                 {
-                    "name": "name",
+                    "name": "who",
+                    "description": "The character or player owning the asset.",
+                    "type": 3,
+                    "required": True
+                },
+                {
+                    "name": "what",
                     "description": "The name of the asset.",
                     "type": 3,
                     "required": True
@@ -461,7 +509,7 @@ xp_json = {
             "type": 1,
             "options": [
                 {
-                    "name": "name",
+                    "name": "who",
                     "description": "Name of character or player.",
                     "type": 3,
                     "required": True
@@ -480,7 +528,7 @@ xp_json = {
             "type": 1,
             "options": [
                 {
-                    "name": "name",
+                    "name": "who",
                     "description": "Name of character or player.",
                     "type": 3,
                     "required": True
@@ -499,7 +547,7 @@ xp_json = {
             "type": 1,
             "options": [
                 {
-                    "name": "name",
+                    "name": "who",
                     "description": "Name of character or player.",
                     "type": 3,
                     "required": True

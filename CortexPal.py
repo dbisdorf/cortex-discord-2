@@ -5,9 +5,15 @@
 # Should cleaning the game remove the pin? probably it should
 # Comments / documentation
 # End feedback with periods?
+# I might not need some safety checks (like missing dice) because Discord enforces stuff
+
+# USER SUGGESTIONS
 # Stress type mandatory - after character name
+# Assign complications and assets to people
 # Can I feed stuff to the autosuggest (like "Physical" stress if it's in the game?)
 # Test allowing trait names in die rolls
+# Pool/roll command should give feedback showing which extra dice you added to the pool
+# Add option to keep 3+ dice for best total/effect suggestion
 
 from endpoints import Controller, AccessDenied
 from discord_interactions import verify_key, InteractionType, InteractionResponseType
@@ -787,8 +793,8 @@ class CortexGame:
     def new(self):
         """Set up new, empty traits for the game."""
 
-        self.complications = NamedDice(self.db, 'complication', None, self)
-        self.assets = NamedDice(self.db, 'asset', None, self)
+        self.complications = GroupedNamedDice(self.db, 'complication', self)
+        self.assets = GroupedNamedDice(self.db, 'asset', self)
         self.pools = DicePools(self.db, self)
         self.plot_points = Resources(self.db, 'plot points', self)
         self.stress = GroupedNamedDice(self.db, 'stress', self)
@@ -1073,22 +1079,28 @@ class Default(Controller):
             update_pin = True
             output = ''
             game.update_activity()
-            comp_name = capitalize_words(options[0]['options'][0]['value'])
+            owner_name = None
+            comp_name = None
+            dice = None
+            for option in options[0]['options']:
+                if option['name'] == 'who':
+                    owner_name = capitalize_words(option['value'])
+                elif option['name'] == 'what':
+                    comp_name = capitalize_words(option['value'])
+                elif option['name'] == 'die':
+                    dice = parse_string_into_dice(option['value'])
             if options[0]['name'] == 'add':
-                dice = parse_string_into_dice(options[0]['options'][1]['value'])
-                if not dice:
-                    raise CortexError(DIE_MISSING_ERROR)
-                elif len(dice) > 1:
+                if len(dice) > 1:
                     raise CortexError(DIE_EXCESS_ERROR)
                 elif dice[0].qty > 1:
                     raise CortexError(DIE_EXCESS_ERROR)
-                output = game.complications.add(comp_name, dice[0])
+                output = '{0} complication for {1}'.format(game.complications.add(owner_name, comp_name, dice[0]), owner_name)
             elif options[0]['name'] == 'remove':
-                output = game.complications.remove(comp_name)
+                output = '{0} complication for {1}'.format(game.complications.remove(owner_name, comp_name), owner_name)
             elif options[0]['name'] == 'stepup':
-                output = game.complications.step_up(comp_name)
+                output = '{0} complication for {1}'.format(game.complications.step_up(owner_name, comp_name), owner_name)
             elif options[0]['name'] == 'stepdown':
-                output = game.complications.step_down(comp_name)
+                output = '{0} complication for {1}'.format(game.complications.step_down(owner_name, comp_name), owner_name)
             else:
                 update_pin = False
                 raise CortexError(INSTRUCTION_ERROR, options[0], 'comp')
@@ -1187,24 +1199,24 @@ class Default(Controller):
             owner_name = None
             stress_name = UNTYPED_STRESS
             for option in options[0]['options']:
-                if option['name'] == 'name':
+                if option['name'] == 'who':
                     owner_name = capitalize_words(option['value'])
-                elif option['name'] == 'type':
+                elif option['name'] == 'what':
                     stress_name = capitalize_words(option['value'])
-                elif option['name'] == 'dice':
+                elif option['name'] == 'die':
                     dice = parse_string_into_dice(option['value'])
             if options[0]['name'] == 'add':
                 if len(dice) > 1:
                     raise CortexError(DIE_EXCESS_ERROR)
                 elif dice[0].qty > 1:
                     raise CortexError(DIE_EXCESS_ERROR)
-                output = '{0} Stress for {1}'.format(game.stress.add(owner_name, stress_name, dice[0]), owner_name)
+                output = '{0} stress for {1}'.format(game.stress.add(owner_name, stress_name, dice[0]), owner_name)
             elif options[0]['name'] == 'remove':
-                output = '{0} Stress for {1}'.format(game.stress.remove(owner_name, stress_name), owner_name)
+                output = '{0} stress for {1}'.format(game.stress.remove(owner_name, stress_name), owner_name)
             elif options[0]['name'] == 'stepup':
-                output = '{0} Stress for {1}'.format(game.stress.step_up(owner_name, stress_name), owner_name)
+                output = '{0} stress for {1}'.format(game.stress.step_up(owner_name, stress_name), owner_name)
             elif options[0]['name'] == 'stepdown':
-                output = '{0} Stress for {1}'.format(game.stress.step_down(owner_name, stress_name), owner_name)
+                output = '{0} stress for {1}'.format(game.stress.step_down(owner_name, stress_name), owner_name)
             elif options[0]['name'] == 'clear':
                 output = game.stress.clear(owner_name)
             else:
@@ -1226,21 +1238,28 @@ class Default(Controller):
             output = ''
             update_pin = True
             game.update_activity()
-            asset_name = capitalize_words(options[0]['options'][0]['value'])
-            if len(options[0]['options']) > 1:
-                dice = parse_string_into_dice(options[0]['options'][1]['value'])
+            owner_name = None
+            asset_name = None
+            dice = None
+            for option in options[0]['options']:
+                if option['name'] == 'who':
+                    owner_name = capitalize_words(option['value'])
+                elif option['name'] == 'what':
+                    asset_name = capitalize_words(option['value'])
+                elif option['name'] == 'die':
+                    dice = parse_string_into_dice(option['value'])
             if options[0]['name'] == 'add':
                 if len(dice) > 1:
                     raise CortexError(DIE_EXCESS_ERROR)
                 elif dice[0].qty > 1:
                     raise CortexError(DIE_EXCESS_ERROR)
-                output = game.assets.add(asset_name, dice[0])
+                output = '{0} asset for {1}'.format(game.assets.add(owner_name, asset_name, dice[0]), owner_name)
             elif options[0]['name'] == 'remove':
-                output = game.assets.remove(asset_name)
+                output = '{0} asset for {1}'.format(game.assets.remove(owner_name, asset_name), owner_name)
             elif options[0]['name'] == 'stepup':
-                output = game.assets.step_up(asset_name)
+                output = '{0} asset for {1}'.format(game.assets.step_up(owner_name, asset_name), owner_name)
             elif options[0]['name'] == 'stepdown':
-                output = game.assets.step_down(asset_name)
+                output = '{0} asset for {1}'.format(game.assets.step_down(owner_name, asset_name), owner_name)
             else:
                 update_pin = False
                 raise CortexError(INSTRUCTION_ERROR, options[0]['name'], 'asset')
