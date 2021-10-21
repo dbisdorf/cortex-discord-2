@@ -2,7 +2,6 @@
 # What do we pass to command functions? DB? Cursor? Game object? Roller?
 # Should the command functions just return a string? instead of an object
 # Required permissions = bot, application.commands, manage messages
-# Should cleaning the game remove the pin? probably it should
 # Comments / documentation
 # End feedback with periods?
 # I might not need some safety checks (like missing dice) because Discord enforces stuff
@@ -1000,35 +999,37 @@ class Default(Controller):
                 self.db.row_factory = sqlite3.Row
                 self.roller = Roller(self.db)
                 game = self.get_game_info(kwargs['guild_id'], kwargs['channel_id'])
+                response_text = ''
 
                 if kwargs['data']['name'] == 'info':
-                    response = self.info(game, kwargs['channel_id'])
+                    response_text = self.info(game, kwargs['channel_id'])
                 elif kwargs['data']['name'] == 'pin':
-                    response = self.pin(game)
+                    response_text = self.pin(game)
                 elif kwargs['data']['name'] == 'comp':
-                    response = self.comp(game, kwargs['data']['options'])
+                    response_text = self.comp(game, kwargs['data']['options'])
                 elif kwargs['data']['name'] == 'pp':
-                    response = self.pp(game, kwargs['data']['options'])
+                    response_text = self.pp(game, kwargs['data']['options'])
                 elif kwargs['data']['name'] == 'roll':
-                    response = self.roll(game, kwargs['data']['options'])
+                    response_text = self.roll(game, kwargs['data']['options'])
                 elif kwargs['data']['name'] == 'pool':
-                    response = self.pool(game, kwargs['data']['options'])
+                    response_text = self.pool(game, kwargs['data']['options'])
                 elif kwargs['data']['name'] == 'stress':
-                    response = self.stress(game, kwargs['data']['options'])
+                    response_text = self.stress(game, kwargs['data']['options'])
                 elif kwargs['data']['name'] == 'asset':
-                    response = self.asset(game, kwargs['data']['options'])
+                    response_text = self.asset(game, kwargs['data']['options'])
                 elif kwargs['data']['name'] == 'xp':
-                    response = self.xp(game, kwargs['data']['options'])
+                    response_text = self.xp(game, kwargs['data']['options'])
                 elif kwargs['data']['name'] == 'clean':
-                    response = self.clean(game)
+                    response_text = self.clean(game)
                 elif kwargs['data']['name'] == 'report':
-                    response = self.report()
+                    response_text = self.report()
                 elif kwargs['data']['name'] == 'option':
-                    response = self.option(game, kwargs['data']['options'])
+                    response_text = self.option(game, kwargs['data']['options'])
                 elif kwargs['data']['name'] == 'help':
-                    response = self.help()
+                    response_text = self.help()
                 else:
-                    response = DiscordResponse(UNKNOWN_COMMAND_ERROR)
+                    response_text = UNKNOWN_COMMAND_ERROR
+                response = DiscordResponse(response_text)
         else:
             raise AccessDenied()
                 
@@ -1073,24 +1074,24 @@ class Default(Controller):
                     if channel.id == game.get_channel():
                         output = output.replace(GAME_INFO_HEADER, GAME_INFO_HEADER + '\n(from channel #{0})'.format(channel.name))
                 '''
-            return DiscordResponse(output)
+            return output
         except CortexError as err:
-            return DiscordResponse(err)
+            return err
         except:
             logging.error(traceback.format_exc())
-            return DiscordResponse(UNEXPECTED_ERROR)
+            return UNEXPECTED_ERROR
 
     def pin(self, game):
         try:
             game.update_activity()
             output = game.output()
             game.pin_info(output, True)
-            return DiscordResponse('Game information pinned.')
+            return 'Game information pinned.'
         except CortexError as err:
-            return DiscordResponse(err)
+            return err
         except:
             logging.error(traceback.format_exc())
-            return DiscordResponse(UNEXPECTED_ERROR)
+            return UNEXPECTED_ERROR
 
     def comp(self, game, options):
         logging.debug("comp command invoked")
@@ -1125,12 +1126,12 @@ class Default(Controller):
                 raise CortexError(INSTRUCTION_ERROR, options[0], 'comp')
             if update_pin and game.has_pin():
                 game.pin_info(game.output())
-            return DiscordResponse(output)
+            return output
         except CortexError as err:
-            return DiscordResponse(err)
+            return err
         except:
             logging.error(traceback.format_exc())
-            return DiscordResponse(UNEXPECTED_ERROR)
+            return UNEXPECTED_ERROR
 
     def pp(self, game, options):
         logging.debug("pp command invoked")
@@ -1152,12 +1153,12 @@ class Default(Controller):
                 raise CortexError(INSTRUCTION_ERROR, options[0], 'pp')
             if update_pin and game.has_pin():
                 game.pin_info(game.output())
-            return DiscordResponse(output)
+            return output
         except CortexError as err:
-            return DiscordResponse(err)
+            return err
         except:
             logging.error(traceback.format_exc())
-            return DiscordResponse(UNEXPECTED_ERROR)
+            return UNEXPECTED_ERROR
 
     def roll(self, game, options):
         logging.debug("roll command invoked")
@@ -1167,12 +1168,12 @@ class Default(Controller):
             dice = parse_string_into_dice(options[0]['value'])
             pool = DicePool(None, incoming_dice=dice)
             echo = convert_to_capitals_and_dice(options[0]['value'])
-            return DiscordResponse('Rolling: {0}\n{1}'.format(echo, pool.roll(self.roller, suggest_best)))
+            return 'Rolling: {0}\n{1}'.format(echo, pool.roll(self.roller, suggest_best))
         except CortexError as err:
-            return DiscordResponse(err)
+            return err
         except:
             logging.error(traceback.format_exc())
-            return DiscordResponse(UNEXPECTED_ERROR)
+            return UNEXPECTED_ERROR
 
     def pool(self, game, options):
         logging.debug("pool command invoked")
@@ -1181,8 +1182,7 @@ class Default(Controller):
             update_pin = True
             game.update_activity()
             suggest_best = game.get_option_as_bool(BEST_OPTION)
-            pool_name = capitalize_words(options[0]['options'][0]['value'])
-            dice = None
+            pool_name = capitalize_words(options[0]['options'][0]['value']) dice = None
             if len(options[0]['options']) > 1:
                 dice = parse_string_into_dice(options[0]['options'][1]['value'])
             if options[0]['name'] == 'add':
@@ -1204,12 +1204,12 @@ class Default(Controller):
                 raise CortexError(INSTRUCTION_ERROR, options[0]['name'], 'pool')
             if update_pin and game.has_pin():
                 game.pin_info(game.output())
-            return DiscordResponse(output)
+            return output
         except CortexError as err:
-            return DiscordResponse(err)
+            return err
         except:
             logging.error(traceback.format_exc())
-            return DiscordResponse(UNEXPECTED_ERROR)
+            return UNEXPECTED_ERROR
 
     def stress(self, game, options):
         logging.debug("stress command invoked")
@@ -1246,12 +1246,12 @@ class Default(Controller):
                 raise CortexError(INSTRUCTION_ERROR, options[0]['name'], 'stress')
             if update_pin and game.has_pin():
                 game.pin_info(game.output())
-            return DiscordResponse(output)
+            return output
         except CortexError as err:
-            return DiscordResponse(err)
+            return err
         except:
             logging.error(traceback.format_exc())
-            return DiscordResponse(UNEXPECTED_ERROR)
+            return UNEXPECTED_ERROR
 
     def asset(self, game, options):
         logging.debug("asset command invoked")
@@ -1287,12 +1287,12 @@ class Default(Controller):
                 raise CortexError(INSTRUCTION_ERROR, options[0]['name'], 'asset')
             if update_pin and game.has_pin():
                 game.pin_info(game.output())
-            return DiscordResponse(output)
+            return output
         except CortexError as err:
-            return DiscordResponse(err)
+            return err
         except:
             logging.error(traceback.format_exc())
-            return DiscordResponse(UNEXPECTED_ERROR)
+            return UNEXPECTED_ERROR
 
     def xp(self, game, options):
         logging.debug("xp command invoked")
@@ -1315,12 +1315,12 @@ class Default(Controller):
                 raise CortexError(INSTRUCTION_ERROR, options[0]['name'], 'xp')
             if update_pin and game.has_pin():
                 game.pin_info(game.output())
-            return DiscordResponse(output)
+            return output
         except CortexError as err:
-            return DiscordResponse(err)
+            return err
         except:
             logging.error(traceback.format_exc())
-            return DiscordResponse(UNEXPECTED_ERROR)
+            return UNEXPECTED_ERROR
 
 
     def clean(self, game):
@@ -1328,24 +1328,24 @@ class Default(Controller):
         try:
             game.update_activity()
             game.clean()
-            return DiscordResponse('Cleaned up all game information.')
+            return 'Cleaned up all game information.'
         except CortexError as err:
-            return DiscordResponse(err)
+            return err
         except:
             logging.error(traceback.format_exc())
-            return DiscordResponse(UNEXPECTED_ERROR)
+            return UNEXPECTED_ERROR
 
     def report(self):
         logging.debug("report command invoked")
         try:
             output = '**CortexPal Usage Report**\n'
             output += self.roller.output()
-            return DiscordResponse(output)
+            return output
         except CortexError as err:
-            return DiscordResponse(err)
+            return err
         except:
             logging.error(traceback.format_exc())
-            return DiscordResponse(UNEXPECTED_ERROR)
+            return UNEXPECTED_ERROR
 
     def option(self, game, options):
         game.update_activity()
@@ -1368,12 +1368,12 @@ class Default(Controller):
                     game.set_option(JOIN_OPTION, argument)
                     joined_game = self.get_game_info(ctx)
                     output = 'Joining the #{0} channel.'.format(argument)
-            return DiscordResponse(output)
+            return output
         except CortexError as err:
-            return DiscordResponse(err)
+            return err
         except:
             logging.error(traceback.format_exc())
-            return DiscordResponse(UNEXPECTED_ERROR)
+            return UNEXPECTED_ERROR
 
     def help(self):
-        return DiscordResponse(HELP_TEXT)
+        return HELP_TEXT
