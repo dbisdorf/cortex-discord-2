@@ -10,8 +10,8 @@
 
 # USER SUGGESTIONS
 # Can I feed stuff to the autosuggest (like "Physical" stress if it's in the game?)
-# Test allowing trait names in die rolls
 # Add option to keep 3+ dice for best total/effect suggestion
+# pp/xp add/remove should default to 1 if no number specified?
 
 from endpoints import Controller, AccessDenied
 from discord_interactions import verify_key, InteractionType, InteractionResponseType
@@ -56,20 +56,20 @@ JOIN_OPTION = 'join'
 
 GAME_INFO_HEADER = '**Cortex Game Information**'
 HELP_TEXT = (
-    'CortexPal2000 v1.0.0: a Discord bot for Cortex Prime RPG players.'
-    'asset  Adjust assets.'
-    'clean  Reset all game data for a channel.'
-    'comp   Adjust complications.'
-    'info   Display all game information.'
-    'option Change the bot\'s optional behavior.'
-    'pin    Pin a message to the channel to hold game information.'
-    'pool   Adjust dice pools.'
-    'pp     Adjust plot points.'
-    'report Report the bot\'s statistics.'
-    'roll   Roll some dice.'
-    'stress Adjust stress.'
-    'xp     Award experience points.'
-    'help   Shows this message'
+    '```CortexPal2000 v0.0.1: a Discord bot for Cortex Prime RPG players.\n'
+    'asset  Adjust assets.\n'
+    'clean  Reset all game data for a channel.\n'
+    'comp   Adjust complications.\n'
+    'info   Display all game information.\n'
+    'option Change the bot\'s optional behavior.\n'
+    'pin    Pin a message to the channel to hold game information.\n'
+    'pool   Adjust dice pools.\n'
+    'pp     Adjust plot points.\n'
+    'report Report the bot\'s statistics.\n'
+    'roll   Roll some dice.\n'
+    'stress Adjust stress.\n'
+    'xp     Award experience points.\n'
+    'help   Shows this message.```'
 )
 
 # Read configuration.
@@ -112,20 +112,36 @@ class CortexError(Exception):
         return self.message.format(*(self.args))
 
 def parse_string_into_dice(words):
-    """Sort the words of an input string, and identify which are dice notations and which are not."""
+    """Examine the words of an input string, and keep those that are dice notations."""
 
     dice = []
     for word in words.split(' '):
-        dice.append(Die(word))
+        if DICE_EXPRESSION.fullmatch(word):
+            dice.append(Die(word))
     return dice
 
 def capitalize_words(words):
-    """Sort the words of an input string, and identify which are numerals and which are not."""
+    """Capitalize the words of an input string."""
 
     capitalized = []
     for word in words.split(' '):
         capitalized.append(word.lower().capitalize())
     return ' '.join(capitalized)
+
+def convert_to_capitals_and_dice(words):
+    """Given a string of words, either capitalize the words or turn them into die notations."""
+
+    converted = []
+    for word in words.split(' '):
+        if DICE_EXPRESSION.fullmatch(word):
+            numbers = word.lower().split('d')
+            if len(numbers) == 1:
+                converted.append('D{0}'.format(numbers[0]))
+            else:
+                converted.append('{0}D{1}'.format(numbers[0], numbers[1]))
+        else:
+            converted.append(word.lower().capitalize())
+    return ' '.join(converted)
 
 def fetch_all_dice_for_parent(db_parent):
     """Given an object from the database, get all the dice that belong to it."""
@@ -456,10 +472,7 @@ class DicePool:
     def roll(self, roller, suggest_best=False):
         """Roll all the dice in the pool, and return a formatted summary of the results."""
 
-        if self.group:
-            output = 'Rolling: {0} pool\n'.format(self.group)
-        else:
-            output = 'Rolling: {0}\n'.format(self.output())
+        output = ''
         separator = ''
         rolls = []
         for die in self.dice:
@@ -1153,7 +1166,8 @@ class Default(Controller):
             suggest_best = game.get_option_as_bool(BEST_OPTION)
             dice = parse_string_into_dice(options[0]['value'])
             pool = DicePool(None, incoming_dice=dice)
-            return DiscordResponse(pool.roll(self.roller, suggest_best))
+            echo = convert_to_capitals_and_dice(options[0]['value'])
+            return DiscordResponse('Rolling: {0}\n{1}'.format(echo, pool.roll(self.roller, suggest_best)))
         except CortexError as err:
             return DiscordResponse(err)
         except:
@@ -1180,11 +1194,11 @@ class Default(Controller):
             elif options[0]['name'] == 'roll':
                 update_pin = False
                 temp_pool = game.pools.temporary_copy(pool_name)
+                output = 'Rolling: {0} pool\n'.format(pool_name)
                 if dice:
                     temp_pool.add(dice)
-                output = temp_pool.roll(self.roller, suggest_best)
-                if dice:
-                    output += '\n(added {0} for this roll)'.format(list_of_dice(dice))
+                    output += '(added {0} for this roll)\n'.format(list_of_dice(dice))
+                output += temp_pool.roll(self.roller, suggest_best)
             else:
                 update_pin = False
                 raise CortexError(INSTRUCTION_ERROR, options[0]['name'], 'pool')
