@@ -6,6 +6,7 @@
 # End feedback with periods?
 # I might not need some safety checks (like missing dice) because Discord enforces stuff
 # remove debug messages
+# Safeties for "keep" option
 
 # USER SUGGESTIONS
 # Can I feed stuff to the autosuggest (like "Physical" stress if it's in the game?)
@@ -468,7 +469,7 @@ class DicePool:
         copy.add(dice_copies)
         return copy
 
-    def roll(self, roller, suggest_best=False):
+    def roll(self, roller, suggest_best=None):
         """Roll all the dice in the pool, and return a formatted summary of the results."""
 
         output = ''
@@ -492,20 +493,32 @@ class DicePool:
             else:
                 # Calculate best total, then choose an effect die
                 rolls.sort(key=lambda roll: roll['value'], reverse=True)
-                best_total_1 = rolls[0]['value']
-                best_addition_1 = '{0}'.format(rolls[0]['value'])
-                best_effect_1 = 'D4'
-                if len(rolls) > 1:
-                    best_total_1 += rolls[1]['value']
-                    best_addition_1 = '{0} + {1}'.format(best_addition_1, rolls[1]['value'])
-                    if len(rolls) > 2:
-                        resorted_rolls = sorted(rolls[2:], key=lambda roll: roll['size'], reverse=True)
-                        best_effect_1 = 'D{0}'.format(resorted_rolls[0]['size'])
-                output += '\nBest Total: {0} ({1}) with Effect: {2}'.format(best_total_1, best_addition_1, best_effect_1)
+                if len(rolls) > suggest_best:
+                    best_total_dice = rolls[:suggest_best]
+                    best_effect_dice = sorted(rolls[suggest_best:], key=lambda roll: roll['size'], reverse=True)
+                    best_effect_1 = 'D{0}'.format(best_effect_dice[0]['size'])
+                else:
+                    best_total_dice = rolls
+                    best_effect_1 = 'D4'
+                best_total_addition = ' + '.join([str(d['value']) for d in best_total_dice])
+                best_total_1 = sum([d['value'] for d in best_total_dice])
+                output += '\nBest Total: {0} ({1}) with Effect: {2}'.format(best_total_1, best_total_addition, best_effect_1)
 
                 # Find best effect die, then chooose best total
-                rolls.sort(key=lambda roll: roll['value'])
-                rolls.sort(key=lambda roll: roll['size'], reverse=True)
+                if len(rolls) > suggest_best:
+                    rolls.sort(key=lambda roll: roll['value'])
+                    rolls.sort(key=lambda roll: roll['size'], reverse=True)
+                    best_effect_2 = 'D{0}'.format(rolls[0]['size'])
+                    resorted_rolls = sorted(rolls[1:], key=lambda roll: roll['value'], reverse=True)
+                    best_total_dice = resorted_rolls[:suggest_best]
+                else:
+                    rolls.sort(key=lambda roll: roll['value'])
+                    best_total_dice = rolls
+                    best_effect_2 = 'D4'
+                best_total_addition = ' + '.join([str(d['value']) for d in best_total_dice])
+                best_total_2 = sum([d['value'] for d in best_total_dice])
+
+                """
                 best_total_2 = rolls[0]['value']
                 best_addition_2 = '{0}'.format(rolls[0]['value'])
                 best_effect_2 = 'D4'
@@ -517,8 +530,10 @@ class DicePool:
                         resorted_rolls = sorted(rolls[1:], key=lambda roll: roll['value'], reverse=True)
                         best_total_2 = resorted_rolls[0]['value'] + resorted_rolls[1]['value']
                         best_addition_2 = '{0} + {1}'.format(resorted_rolls[0]['value'], resorted_rolls[1]['value'])
+                """
+
                 if best_effect_1 != best_effect_1 or best_total_1 != best_total_2:
-                    output += ' | Best Effect: {0} with Total: {1} ({2})'.format(best_effect_2, best_total_2, best_addition_2)
+                    output += ' | Best Effect: {0} with Total: {1} ({2})'.format(best_effect_2, best_total_2, best_total_addition)
         return output
 
     def output(self):
@@ -1140,11 +1155,12 @@ class Default(Controller):
             update_pin = True
             game.update_activity()
             char_name = capitalize_words(options[0]['options'][0]['value'])
-            if options[0]['name'] == 'add':
+            qty = 1
+            if len(options[0]['options']) > 1:
                 qty = options[0]['options'][1]['value']
+            if options[0]['name'] == 'add':
                 output = 'Plot points for {0} (added {1})'.format(game.plot_points.add(char_name, qty), qty)
             elif options[0]['name'] == 'remove':
-                qty = options[0]['options'][1]['value']
                 output = 'Plot points for {0} (removed {1})'.format(game.plot_points.remove(char_name, qty), qty)
             elif options[0]['name'] == 'clear':
                 output = game.plot_points.clear(char_name)
@@ -1164,8 +1180,15 @@ class Default(Controller):
         logging.debug("roll command invoked")
         results = {}
         try:
-            suggest_best = game.get_option_as_bool(BEST_OPTION)
-            dice = parse_string_into_dice(options[0]['value'])
+            if game.get_option_as_bool(BEST_OPTION):
+                suggest_best = 2
+            else:
+                suggest_best = None
+            for option in options:
+                if option['name'] == 'dice':
+                    dice = parse_string_into_dice(option['value'])
+                if option['name'] == 'keep' and suggest_best:
+                    suggest_best = option['value']
             pool = DicePool(None, incoming_dice=dice)
             echo = convert_to_capitals_and_dice(options[0]['value'])
             return 'Rolling: {0}\n{1}'.format(echo, pool.roll(self.roller, suggest_best))
@@ -1181,10 +1204,18 @@ class Default(Controller):
             output = ''
             update_pin = True
             game.update_activity()
-            suggest_best = game.get_option_as_bool(BEST_OPTION)
-            pool_name = capitalize_words(options[0]['options'][0]['value']) dice = None
-            if len(options[0]['options']) > 1:
-                dice = parse_string_into_dice(options[0]['options'][1]['value'])
+            if game.get_option_as_bool(BEST_OPTION):
+                suggest_best = 2
+            else:
+                suggest_best = None
+            dice = None
+            for option in options[0]['options']:
+                if option['name'] == 'name':
+                    pool_name = capitalize_words(option['value']) 
+                if option['name'] == 'dice':
+                    dice = parse_string_into_dice(option['value'])
+                if option['name'] == 'keep' and suggest_best:
+                    suggest_best = option['value']
             if options[0]['name'] == 'add':
                 output = game.pools.add(pool_name, dice)
             elif options[0]['name'] == 'remove':

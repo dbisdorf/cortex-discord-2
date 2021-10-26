@@ -13,6 +13,8 @@ headers = {
 
 print(headers)
 
+"""
+
 info_json = {
     "name": "info",
     "type": 1,
@@ -149,8 +151,7 @@ pp_json = {
                 {
                     "name": "number",
                     "description": "How many plot points.",
-                    "type": 4,
-                    "required": True
+                    "type": 4
                 }
             ]
         },
@@ -168,8 +169,7 @@ pp_json = {
                 {
                     "name": "number",
                     "description": "How many plot points.",
-                    "type": 4,
-                    "required": True
+                    "type": 4
                 }
             ]
         },
@@ -204,6 +204,11 @@ roll_json = {
             "description": "The dice to roll",
             "type": 3,
             "required": True
+        },
+        {
+            "name": "keep",
+            "description": "How many dice to keep",
+            "type": 4
         }
     ]
 }
@@ -212,6 +217,9 @@ print("Submitting roll")
 r = requests.post(url, headers=headers, json=roll_json)
 print(r.text)
 time.sleep(5)
+
+
+"""
 
 pool_json = {
     "name": "pool",
@@ -271,6 +279,11 @@ pool_json = {
                     "name": "dice",
                     "description": "Extra dice to include in this roll.",
                     "type": 3
+                },
+                {
+                    "name": "keep",
+                    "description": "How many dice to keep",
+                    "type": 4
                 }
             ]
         },
@@ -294,6 +307,8 @@ print("Submitting pool")
 r = requests.post(url, headers=headers, json=pool_json)
 print(r.text)
 time.sleep(5)
+
+"""
 
 stress_json = {
     "name": "stress",
@@ -517,8 +532,7 @@ xp_json = {
                 {
                     "name": "number",
                     "description": "How many experience points.",
-                    "type": 4,
-                    "required": True
+                    "type": 4
                 }
             ]
         },
@@ -536,8 +550,7 @@ xp_json = {
                 {
                     "name": "number",
                     "description": "How many experience points.",
-                    "type": 4,
-                    "required": True
+                    "type": 4
                 }
             ]
         },
@@ -658,3 +671,4 @@ r = requests.post(url, headers=headers, json=help_json)
 print(r.text)
 time.sleep(5)
 
+"""
