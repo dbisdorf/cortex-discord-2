@@ -13,8 +13,6 @@ headers = {
 
 print(headers)
 
-"""
-
 info_json = {
     "name": "info",
     "type": 1,
@@ -83,6 +81,11 @@ comp_json = {
                     "description": "Complication name.",
                     "type": 3,
                     "required": True
+                },
+                {
+                    "name": "steps",
+                    "description": "How many steps.",
+                    "type": 4
                 }
             ]
         },
@@ -102,6 +105,11 @@ comp_json = {
                     "description": "Complication name.",
                     "type": 3,
                     "required": True
+                },
+                {
+                    "name": "steps",
+                    "description": "How many steps.",
+                    "type": 4
                 }
             ]
         },
@@ -219,8 +227,6 @@ print(r.text)
 time.sleep(5)
 
 
-"""
-
 pool_json = {
     "name": "pool",
     "type": 1,
@@ -308,8 +314,6 @@ r = requests.post(url, headers=headers, json=pool_json)
 print(r.text)
 time.sleep(5)
 
-"""
-
 stress_json = {
     "name": "stress",
     "type": 1,
@@ -356,6 +360,11 @@ stress_json = {
                     "description": "The type of stress.",
                     "type": 3,
                     "required": True
+                },
+                {
+                    "name": "steps",
+                    "description": "How many steps.",
+                    "type": 4
                 }
             ]
         },
@@ -375,6 +384,11 @@ stress_json = {
                     "description": "The type of stress.",
                     "type": 3,
                     "required": True
+                },
+                {
+                    "name": "steps",
+                    "description": "How many steps.",
+                    "type": 4
                 }
             ]
         },
@@ -464,6 +478,11 @@ asset_json = {
                     "description": "The name of the asset.",
                     "type": 3,
                     "required": True
+                },
+                {
+                    "name": "steps",
+                    "description": "How many steps.",
+                    "type": 4
                 }
             ]
         },
@@ -483,6 +502,11 @@ asset_json = {
                     "description": "The name of the asset.",
                     "type": 3,
                     "required": True
+                },
+                {
+                    "name": "steps",
+                    "description": "How many steps.",
+                    "type": 4
                 }
             ]
         },
@@ -671,4 +695,3 @@ r = requests.post(url, headers=headers, json=help_json)
 print(r.text)
 time.sleep(5)
 
-"""

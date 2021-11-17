@@ -7,11 +7,11 @@
 # I might not need some safety checks (like missing dice) because Discord enforces stuff
 # remove debug messages
 # Safeties for "keep" option
+# When you remove the last comp from a PC, the pinned message doesn't completely update until the next command
+# Constrain all numbers to 1 or higher
 
 # USER SUGGESTIONS
 # Can I feed stuff to the autosuggest (like "Physical" stress if it's in the game?)
-# Add option to keep 3+ dice for best total/effect suggestion
-# pp/xp add/remove should default to 1 if no number specified?
 
 from endpoints import Controller, AccessDenied
 from discord_interactions import verify_key, InteractionType, InteractionResponseType
@@ -50,6 +50,7 @@ INSTRUCTION_ERROR = '`{0}` is not a valid instruction for the `{1}` command.'
 UNKNOWN_COMMAND_ERROR = 'That\'s not a valid command.'
 JOIN_ERROR = 'The #{0} channel does not allow other channels to join. Future commands apply only to this channel.'
 UNEXPECTED_ERROR = 'Oops. A software error interrupted this command.'
+LOW_NUMBER_ERROR = '{0} must be greater than zero.'
 
 BEST_OPTION = 'best'
 JOIN_OPTION = 'join'
@@ -209,17 +210,19 @@ class Die:
             self.cursor.execute('DELETE FROM DIE WHERE GUID=:guid', {'guid':self.db_guid})
             self.db.commit()
 
-    def step_down(self):
+    def step_down(self, steps=1):
         """Step down the die size."""
 
-        if self.size > 4:
-            self.update_size(self.size - 2)
+        new_size = max(4, self.size - (2 * steps))
+        if self.size != new_size:
+            self.update_size(new_size)
 
-    def step_up(self):
+    def step_up(self, steps=1):
         """Step up the die size."""
 
-        if self.size < 12:
-            self.update_size(self.size + 2)
+        new_size = min(12, self.size + (2 * steps))
+        if self.size != new_size:
+            self.update_size(new_size)
 
     def combine(self, other_die):
         """Combine this die with another die (as when applying a new stress die to existing stress)."""
@@ -329,27 +332,27 @@ class NamedDice:
         del self.dice[name]
         return output
 
-    def step_up(self, name):
+    def step_up(self, name, steps=1):
         """Step up the die with a given name."""
 
         if not name in self.dice:
             raise CortexError(NOT_EXIST_ERROR, self.category)
         if self.dice[name].is_max():
             return 'This would step up the {0} beyond {1}.'.format(self.category, self.output(name))
-        self.dice[name].step_up()
-        return 'Stepped up {0} to {1}'.format(self.category, self.output(name))
+        self.dice[name].step_up(steps)
+        return 'Stepped up {0} to {1}.'.format(self.category, self.output(name))
 
-    def step_down(self, name):
+    def step_down(self, name, steps=1):
         """Step down the die with a given name."""
 
         if not name in self.dice:
             raise CortexError(NOT_EXIST_ERROR, self.category)
-        if self.dice[name].size == 4:
+        if self.dice[name].size - (steps * 2) < 4:
             self.remove(name)
-            return 'Stepped down and removed {0}: {1}'.format(self.category, name)
+            return 'Stepped down and removed {0}: {1}.'.format(self.category, name)
         else:
-            self.dice[name].step_down()
-            return 'Stepped down {0} to {1}'.format(self.category, self.output(name))
+            self.dice[name].step_down(steps)
+            return 'Stepped down {0} to {1}.'.format(self.category, self.output(name))
 
     def get_all_names(self):
         """Identify the names of all the dice in this object."""
@@ -757,7 +760,11 @@ class GroupedNamedDice:
 
         if not group in self.groups:
             raise CortexError(HAS_NONE_ERROR, group, self.category)
-        return self.groups[group].remove(name)
+        output = self.groups[group].remove(name)
+        if self.groups[group].is_empty():
+            self.groups[group].remove_from_db()
+            del self.groups[group]
+        return output
 
     def clear(self, group):
         """Remove all dice from a given group."""
@@ -768,19 +775,23 @@ class GroupedNamedDice:
         del self.groups[group]
         return 'Cleared all {0} for {1}.'.format(self.category, group)
 
-    def step_up(self, group, name):
+    def step_up(self, group, name, steps=1):
         """Step up the die with a given name, within a given group."""
 
         if not group in self.groups:
             raise CortexError(HAS_NONE_ERROR, group, self.category)
-        return self.groups[group].step_up(name)
+        return self.groups[group].step_up(name, steps)
 
-    def step_down(self, group, name):
+    def step_down(self, group, name, steps=1):
         """Step down the die with a given name, within a given group."""
 
         if not group in self.groups:
             raise CortexError(HAS_NONE_ERROR, group, self.category)
-        return self.groups[group].step_down(name)
+        output = self.groups[group].step_down(name, steps)
+        if self.groups[group].is_empty():
+            self.groups[group].remove_from_db()
+            del self.groups[group]
+        return output
 
     def output(self, group):
         """Return a formatted list of all the dice within a given group."""
@@ -1117,6 +1128,7 @@ class Default(Controller):
             owner_name = None
             comp_name = None
             dice = None
+            steps = 1
             for option in options[0]['options']:
                 if option['name'] == 'who':
                     owner_name = capitalize_words(option['value'])
@@ -1124,18 +1136,24 @@ class Default(Controller):
                     comp_name = capitalize_words(option['value'])
                 elif option['name'] == 'die':
                     dice = parse_string_into_dice(option['value'])
+                elif option['name'] == 'steps':
+                    steps = option['value']
+                    if steps < 1:
+                        raise CortexError(LOW_NUMBER_ERROR, 'Steps')
             if options[0]['name'] == 'add':
-                if len(dice) > 1:
+                if not dice:
+                    raise CortexError(DIE_MISSING_ERROR)
+                elif len(dice) > 1:
                     raise CortexError(DIE_EXCESS_ERROR)
                 elif dice[0].qty > 1:
                     raise CortexError(DIE_EXCESS_ERROR)
-                output = '{0} complication for {1}'.format(game.complications.add(owner_name, comp_name, dice[0]), owner_name)
+                output = '{0} ({1})'.format(game.complications.add(owner_name, comp_name, dice[0]), owner_name)
             elif options[0]['name'] == 'remove':
-                output = '{0} complication for {1}'.format(game.complications.remove(owner_name, comp_name), owner_name)
+                output = '{0} ({1})'.format(game.complications.remove(owner_name, comp_name), owner_name)
             elif options[0]['name'] == 'stepup':
-                output = '{0} complication for {1}'.format(game.complications.step_up(owner_name, comp_name), owner_name)
+                output = '{0} ({1})'.format(game.complications.step_up(owner_name, comp_name, steps), owner_name)
             elif options[0]['name'] == 'stepdown':
-                output = '{0} complication for {1}'.format(game.complications.step_down(owner_name, comp_name), owner_name)
+                output = '{0} ({1})'.format(game.complications.step_down(owner_name, comp_name, steps), owner_name)
             else:
                 update_pin = False
                 raise CortexError(INSTRUCTION_ERROR, options[0], 'comp')
@@ -1158,6 +1176,8 @@ class Default(Controller):
             qty = 1
             if len(options[0]['options']) > 1:
                 qty = options[0]['options'][1]['value']
+                if qty < 1:
+                    raise CortexError(LOW_NUMBER_ERROR, 'Number')
             if options[0]['name'] == 'add':
                 output = 'Plot points for {0} (added {1})'.format(game.plot_points.add(char_name, qty), qty)
             elif options[0]['name'] == 'remove':
@@ -1189,6 +1209,10 @@ class Default(Controller):
                     dice = parse_string_into_dice(option['value'])
                 if option['name'] == 'keep' and suggest_best:
                     suggest_best = option['value']
+                    if suggest_best < 1:
+                        raise CortexError(LOW_NUMBER_ERROR, 'Dice kept')
+            if len(dice) == 0:
+               raise CortexError(DIE_MISSING_ERROR) 
             pool = DicePool(None, incoming_dice=dice)
             echo = convert_to_capitals_and_dice(options[0]['value'])
             return 'Rolling: {0}\n{1}'.format(echo, pool.roll(self.roller, suggest_best))
@@ -1216,6 +1240,10 @@ class Default(Controller):
                     dice = parse_string_into_dice(option['value'])
                 if option['name'] == 'keep' and suggest_best:
                     suggest_best = option['value']
+                    if suggest_best < 1:
+                        raise CortexError(LOW_NUMBER_ERROR, 'Dice kept')
+            if options[0]['name'] in ['add', 'remove'] and not dice:
+                raise CortexError(DIE_MISSING_ERROR)
             if options[0]['name'] == 'add':
                 output = game.pools.add(pool_name, dice)
             elif options[0]['name'] == 'remove':
@@ -1250,6 +1278,7 @@ class Default(Controller):
             game.update_activity()
             dice = None
             owner_name = None
+            steps = 1
             stress_name = UNTYPED_STRESS
             for option in options[0]['options']:
                 if option['name'] == 'who':
@@ -1258,18 +1287,24 @@ class Default(Controller):
                     stress_name = capitalize_words(option['value'])
                 elif option['name'] == 'die':
                     dice = parse_string_into_dice(option['value'])
+                elif option['name'] == 'steps':
+                    steps = option['value']
+                    if steps < 1:
+                        raise CortexError(LOW_NUMBER_ERROR, 'Steps')
             if options[0]['name'] == 'add':
-                if len(dice) > 1:
+                if not dice:
+                    raise CortexError(DIE_MISSING_ERROR)
+                elif len(dice) > 1:
                     raise CortexError(DIE_EXCESS_ERROR)
                 elif dice[0].qty > 1:
                     raise CortexError(DIE_EXCESS_ERROR)
-                output = '{0} stress for {1}'.format(game.stress.add(owner_name, stress_name, dice[0]), owner_name)
+                output = '{0} ({1})'.format(game.stress.add(owner_name, stress_name, dice[0]), owner_name)
             elif options[0]['name'] == 'remove':
-                output = '{0} stress for {1}'.format(game.stress.remove(owner_name, stress_name), owner_name)
+                output = '{0} ({1})'.format(game.stress.remove(owner_name, stress_name), owner_name)
             elif options[0]['name'] == 'stepup':
-                output = '{0} stress for {1}'.format(game.stress.step_up(owner_name, stress_name), owner_name)
+                output = '{0} ({1})'.format(game.stress.step_up(owner_name, stress_name, steps), owner_name)
             elif options[0]['name'] == 'stepdown':
-                output = '{0} stress for {1}'.format(game.stress.step_down(owner_name, stress_name), owner_name)
+                output = '{0} ({1})'.format(game.stress.step_down(owner_name, stress_name, steps), owner_name)
             elif options[0]['name'] == 'clear':
                 output = game.stress.clear(owner_name)
             else:
@@ -1294,6 +1329,7 @@ class Default(Controller):
             owner_name = None
             asset_name = None
             dice = None
+            steps = 1
             for option in options[0]['options']:
                 if option['name'] == 'who':
                     owner_name = capitalize_words(option['value'])
@@ -1301,18 +1337,22 @@ class Default(Controller):
                     asset_name = capitalize_words(option['value'])
                 elif option['name'] == 'die':
                     dice = parse_string_into_dice(option['value'])
+                elif option['name'] == 'steps':
+                    steps = option['value']
+                    if steps < 1:
+                        raise CortexError(LOW_NUMBER_ERROR, 'Steps')
             if options[0]['name'] == 'add':
                 if len(dice) > 1:
                     raise CortexError(DIE_EXCESS_ERROR)
                 elif dice[0].qty > 1:
                     raise CortexError(DIE_EXCESS_ERROR)
-                output = '{0} asset for {1}'.format(game.assets.add(owner_name, asset_name, dice[0]), owner_name)
+                output = '{0} ({1})'.format(game.assets.add(owner_name, asset_name, dice[0]), owner_name)
             elif options[0]['name'] == 'remove':
-                output = '{0} asset for {1}'.format(game.assets.remove(owner_name, asset_name), owner_name)
+                output = '{0} ({1})'.format(game.assets.remove(owner_name, asset_name), owner_name)
             elif options[0]['name'] == 'stepup':
-                output = '{0} asset for {1}'.format(game.assets.step_up(owner_name, asset_name), owner_name)
+                output = '{0} ({1})'.format(game.assets.step_up(owner_name, asset_name, steps), owner_name)
             elif options[0]['name'] == 'stepdown':
-                output = '{0} asset for {1}'.format(game.assets.step_down(owner_name, asset_name), owner_name)
+                output = '{0} ({1})'.format(game.assets.step_down(owner_name, asset_name, steps), owner_name)
             else:
                 update_pin = False
                 raise CortexError(INSTRUCTION_ERROR, options[0]['name'], 'asset')
@@ -1335,6 +1375,8 @@ class Default(Controller):
             qty = 1
             if len(options[0]['options']) > 1:
                 qty = options[0]['options'][1]['value']
+                if qty < 1:
+                    raise CortexError(LOW_NUMBER_ERROR, 'Number')
             if options[0]['name'] == 'add':
                 output = 'Experience points for {0} (added {1})'.format(game.xp.add(xp_name, qty), qty)
             elif options[0]['name'] == 'remove':
