@@ -85,7 +85,8 @@ comp_json = {
                 {
                     "name": "steps",
                     "description": "How many steps.",
-                    "type": 4
+                    "type": 4,
+                    "min_value": 1
                 }
             ]
         },
@@ -109,7 +110,8 @@ comp_json = {
                 {
                     "name": "steps",
                     "description": "How many steps.",
-                    "type": 4
+                    "type": 4,
+                    "min_value": 1
                 }
             ]
         },
@@ -159,7 +161,8 @@ pp_json = {
                 {
                     "name": "number",
                     "description": "How many plot points.",
-                    "type": 4
+                    "type": 4,
+                    "min_value": 1
                 }
             ]
         },
@@ -177,7 +180,8 @@ pp_json = {
                 {
                     "name": "number",
                     "description": "How many plot points.",
-                    "type": 4
+                    "type": 4,
+                    "min_value": 1
                 }
             ]
         },
@@ -216,7 +220,8 @@ roll_json = {
         {
             "name": "keep",
             "description": "How many dice to keep",
-            "type": 4
+            "type": 4,
+            "min_value": 1
         }
     ]
 }
@@ -364,7 +369,8 @@ stress_json = {
                 {
                     "name": "steps",
                     "description": "How many steps.",
-                    "type": 4
+                    "type": 4,
+                    "min_value": 1
                 }
             ]
         },
@@ -388,7 +394,8 @@ stress_json = {
                 {
                     "name": "steps",
                     "description": "How many steps.",
-                    "type": 4
+                    "type": 4,
+                    "min_value": 1
                 }
             ]
         },
@@ -482,7 +489,8 @@ asset_json = {
                 {
                     "name": "steps",
                     "description": "How many steps.",
-                    "type": 4
+                    "type": 4,
+                    "min_value": 1
                 }
             ]
         },
@@ -506,7 +514,8 @@ asset_json = {
                 {
                     "name": "steps",
                     "description": "How many steps.",
-                    "type": 4
+                    "type": 4,
+                    "min_value": 1
                 }
             ]
         },
@@ -556,7 +565,8 @@ xp_json = {
                 {
                     "name": "number",
                     "description": "How many experience points.",
-                    "type": 4
+                    "type": 4,
+                    "min_value": 1
                 }
             ]
         },
@@ -574,7 +584,8 @@ xp_json = {
                 {
                     "name": "number",
                     "description": "How many experience points.",
-                    "type": 4
+                    "type": 4,
+                    "min_value": 1
                 }
             ]
         },
@@ -687,7 +698,64 @@ time.sleep(5)
 help_json = {
     "name": "help",
     "type": 1,
-    "description": "List the commands that CortexPal2000 supports."
+    "description": "List the commands that CortexPal2000 supports.",
+    "options": [
+        {
+            "name": "command",
+            "description": "The command to show instructions for.",
+            "type": 3,
+            "choices": [
+                {
+                    "name": "asset",
+                    "value": "asset"
+                },
+                {
+                    "name": "clean",
+                    "value": "clean"
+                },
+                {
+                    "name": "comp",
+                    "value": "comp",
+                },
+                {
+                    "name": "info",
+                    "value": "info"
+                }
+                {
+                    "name": "option",
+                    "value": "option"
+                },
+                {
+                    "name": "pin",
+                    "value": "pin"
+                },
+                {
+                    "name": "pool",
+                    "value": "pool"
+                },
+                {
+                    "name": "pp",
+                    "value": "pp"
+                },
+                {
+                    "name": "report",
+                    "value": "report"
+                },
+                {
+                    "name": "roll",
+                    "value": "roll"
+                },
+                {
+                    "name": "stress",
+                    "value": "stress"
+                },
+                {
+                    "name": "xp",
+                    "value": "xp"
+                }
+            ]
+        }
+    ]
 }
 
 print("Submitting help")

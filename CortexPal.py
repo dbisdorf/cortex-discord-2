@@ -4,11 +4,11 @@
 # Required permissions = bot, application.commands, manage messages
 # Comments / documentation
 # End feedback with periods?
-# I might not need some safety checks (like missing dice) because Discord enforces stuff
 # remove debug messages
 # Safeties for "keep" option
-# When you remove the last comp from a PC, the pinned message doesn't completely update until the next command
 # Constrain all numbers to 1 or higher
+# Help should include sample commands
+# Test purge
 
 # USER SUGGESTIONS
 # Can I feed stuff to the autosuggest (like "Physical" stress if it's in the game?)
@@ -1342,7 +1342,9 @@ class Default(Controller):
                     if steps < 1:
                         raise CortexError(LOW_NUMBER_ERROR, 'Steps')
             if options[0]['name'] == 'add':
-                if len(dice) > 1:
+                if not dice:
+                    raise CortexError(DIE_MISSING_ERROR)
+                elif len(dice) > 1:
                     raise CortexError(DIE_EXCESS_ERROR)
                 elif dice[0].qty > 1:
                     raise CortexError(DIE_EXCESS_ERROR)
