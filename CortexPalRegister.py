@@ -13,6 +13,8 @@ headers = {
 
 print(headers)
 
+"""
+
 info_json = {
     "name": "info",
     "type": 1,
@@ -695,6 +697,8 @@ r = requests.post(url, headers=headers, json=option_json)
 print(r.text)
 time.sleep(5)
 
+"""
+
 help_json = {
     "name": "help",
     "type": 1,
@@ -720,7 +724,7 @@ help_json = {
                 {
                     "name": "info",
                     "value": "info"
-                }
+                },
                 {
                     "name": "option",
                     "value": "option"

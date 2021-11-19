@@ -9,6 +9,7 @@
 # Constrain all numbers to 1 or higher
 # Help should include sample commands
 # Test purge
+# Test join
 
 # USER SUGGESTIONS
 # Can I feed stuff to the autosuggest (like "Physical" stress if it's in the game?)
@@ -70,7 +71,123 @@ HELP_TEXT = (
     'roll   Roll some dice.\n'
     'stress Adjust stress.\n'
     'xp     Award experience points.\n'
-    'help   Shows this message.```'
+    'help   Provides command hints.\n'
+    'Also try using help to show hints for specific commands (like /help command:asset).```'
+)
+
+ASSET_HELP_TEXT = (
+    '```Adjust assets.\n'
+    '\n'
+    'For example:\n'
+    '/asset add who:anne what:big wrench die:6         (gives Anne a D6 Big Wrench asset)\n'
+    '/asset stepup who:beth what:fast car              (steps up Beth\'s Fast Car asset)\n'
+    '/asset stepdown who:cat what:nice outfit steps:2  (steps down Cat\'s Nice Outfit asset twice)\n'
+    '/asset remove who:dora what:jetpack               (removes Dora\'s Jetpack asset)```'
+)
+
+CLEAN_HELP_TEXT = (
+    '```Reset all game data for a channel.```'
+)
+
+COMP_HELP_TEXT = (
+    '```Adjust complications.\n'
+    '\n'
+    'For example:\n'
+    '/comp add who:anne what:cloud of smoke die:6  (gives Anne a D6 Cloud Of Smoke complication)\n'
+    '/comp stepup who:beth what:confused           (steps up Beth\'s Confused complication)\n'
+    '/comp stepdown who:cat what:dazed steps:2     (steps down Cat\'s Dazed complication twice)\n'
+    '/comp remove who:dora what:sun in your eyes   (removes Dora\'s Sun In Your Eyes complication)```'
+)
+
+INFO_HELP_TEXT = (
+    '```Display all game information.```'
+)
+
+OPTION_HELP_TEXT = (
+    '```Change the bot\'s optional behavior.\n'
+    '\n'
+    'For example:\n'
+    '/option best switch:on              (turn on suggestions for best total and effect)\n'
+    '/option best switch:off             (turn off suggestions for best total and effect)\n'
+    '/option join switch:on              (allow other channels to join this channel)\n'
+    '/option join switch:off             (break and prohibit joins between this channel and other channels)\n'
+    '/option join channel:other-channel  (all commands from this channel apply to the game in #other-channel)```'
+)
+
+PIN_HELP_TEXT = (
+    '```Pin a message to the channel to hold game information.```'
+)
+
+POOL_HELP_TEXT = (
+    '```Adjust dice pools.\n'
+    '\n'
+    'For example:\n'
+    '/pool add name:doom dice:6 2d8    (gives the Doom pool a D6 and 2D8)\n'
+    '/pool remove name:doom dice:10    (spends a D10 from the Doom pool)\n'
+    '/pool roll name:doom              (rolls the Doom pool)\n'
+    '/pool roll name:doom dice:2d6 10  (rolls the Doom pool and adds 2D6 and a D10)\n'
+    '/pool roll name:doom keep:3       (rolls the Doom pool and keeps three dice for the total)\n'
+    '/pool clear name:doom             (clears the entire Doom pool)\n'
+    'The "keep" option only functions if you\'ve used the "/option" command to tell the bot\n'
+    'to suggest the best total and effect dice.\n'
+    '\n'
+    'When rolling a pool and adding dice, you may include your trait names.\n'
+    'The command will ignore any words that don\'t look like dice.\n'
+    '\n'
+    'For example:\n'
+    '/pool roll name:doom dice:D6 Mind D10 Pirate (adds D6 and D10 to the pool when rolling)```'
+)
+
+PP_HELP_TEXT = (
+    '```Adjust plot points.\n'
+    '\n'
+    'For example:\n'
+    '/pp add who:alice number:3     (gives Alice 3 plot points)\n'
+    '/pp remove who:alice           (spends one of Alice\'s plot points)\n'
+    '/pp remove who:alice number:6  (spends six of Alice\'s plot points)\n'
+    '/pp clear who:alice            (clears Alice from plot point lists)```'
+) 
+
+REPORT_HELP_TEXT = (
+    '```Report the bot\'s statistics.```'
+)
+
+ROLL_HELP_TEXT = (
+    '```Roll since dice.\n'
+    '\n'
+    'For example:\n'
+    '/roll dice:12               (rolls a D12)\n'
+    '/roll dice:4 3d8 10 10      (rolls a D4, 3D8, and 2D10)\n'
+    '/roll dice:6 6 6 8 8 keep:3 (rolls 3D6 and 2D8 and keeps the best three for the total)\n'
+    'The "keep" option only functions if you\'ve used the "/option" command to tell the bot\n'
+    'to suggest the best total and effect dice.\n'
+    '\n'
+    'You may include your trait names. The command will ignore any words that don\'t look like dice.\n'
+    '\n'
+    'For example:\n'
+    '/roll D6 Mind D10 Navigation D6 Pirate (rolls 2D6 and a D10, ignoring the trait names)```'
+)
+
+STRESS_HELP_TEXT = (
+    '```Adjust stress.\n'
+    '\n'
+    'For example:\n'
+    '/stress add who:amy die:8                       (gives Amy D8 general stress)\n'
+    '/stress add who:ben what:mental die:6           (gives Ben D6 Mental stress)\n'
+    '/stress stepup who:cat what:social              (steps up Cat\'s Social stress)\n'
+    '/stress stepdown who:doe what:physical steps:2  (steps down Doe\'s Physical stress twice)\n'
+    '/stress remove who:eve what:psychic             (removes Eve\'s Psychic stress)\n'
+    '/stress clear who:fin                           (clears all of Fin\'s stress)```'
+)
+
+XP_HELP_TEXT = (
+    '```Award experience points.\n'
+    '\n'
+    'For example:\n'
+    '/xp add who:alice number:3     (gives Alice 3 experience points)\n'
+    '/xp remove who:alice           (spends one of Alice\'s experience points)\n'
+    '/xp remove who:alice number:5  (spends five of Alice\'s experience points)\n'
+    '/xp clear alice                (clears Alice from experience point lists)```'
 )
 
 # Read configuration.
@@ -1052,7 +1169,10 @@ class Default(Controller):
                 elif kwargs['data']['name'] == 'option':
                     response_text = self.option(game, kwargs['data']['options'])
                 elif kwargs['data']['name'] == 'help':
-                    response_text = self.help()
+                    if 'options' in kwargs['data']:
+                        response_text = self.help(kwargs['data']['options'])
+                    else:
+                        response_text = self.help()
                 else:
                     response_text = UNKNOWN_COMMAND_ERROR
                 response = DiscordResponse(response_text)
@@ -1450,5 +1570,31 @@ class Default(Controller):
             logging.error(traceback.format_exc())
             return UNEXPECTED_ERROR
 
-    def help(self):
-        return HELP_TEXT
+    def help(self, options=[]):
+        if options:
+            if options[0]['value'] == 'asset':
+                return ASSET_HELP_TEXT
+            elif options[0]['value'] == 'clean':
+                return CLEAN_HELP_TEXT
+            elif options[0]['value'] == 'comp':
+                return COMP_HELP_TEXT
+            elif options[0]['value'] == 'info':
+                return INFO_HELP_TEXT
+            elif options[0]['value'] == 'option':
+                return OPTION_HELP_TEXT
+            elif options[0]['value'] == 'pin':
+                return PIN_HELP_TEXT
+            elif options[0]['value'] == 'pool':
+                return POOL_HELP_TEXT
+            elif options[0]['value'] == 'pp':
+                return PP_HELP_TEXT
+            elif options[0]['value'] == 'report':
+                return REPORT_HELP_TEXT
+            elif options[0]['value'] == 'roll':
+                return ROLL_HELP_TEXT
+            elif options[0]['value'] == 'stress':
+                return STRESS_HELP_TEXT
+            elif options[0]['value'] == 'xp':
+                return XP_HELP_TEXT
+        else:
+            return HELP_TEXT
