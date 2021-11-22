@@ -8,6 +8,7 @@
 # Safeties for "keep" option
 # Test purge
 # Test join
+# Looks like there really are autocomplete features
 
 # USER SUGGESTIONS
 # Can I feed stuff to the autosuggest (like "Physical" stress if it's in the game?)
@@ -1004,6 +1005,9 @@ class CortexGame:
             output += '\n'
         return output
 
+    def get_server(self):
+        return self.server
+
     def get_channel(self):
         return self.channel
 
@@ -1167,7 +1171,10 @@ class Default(Controller):
                 elif kwargs['data']['name'] == 'report':
                     response_text = self.report()
                 elif kwargs['data']['name'] == 'option':
-                    response_text = self.option(game, kwargs['data']['options'])
+                    resolved = None
+                    if 'resolved' in kwargs['data']:
+                        resolved = kwargs['data']['resolved']
+                    response_text = self.option(game, kwargs['data']['options'], resolved)
                 elif kwargs['data']['name'] == 'help':
                     if 'options' in kwargs['data']:
                         response_text = self.help(kwargs['data']['options'])
@@ -1193,18 +1200,20 @@ class Default(Controller):
             if joined_channel:
                 if game_info.get_option(JOIN_OPTION) != 'on':
                     joined_channel_name = 'other'
+                    """
                     for channel in context.guild.channels:
                         if channel.id == game_key[1]:
                             joined_channel_name = channel.name
+                    """
                     game_info = fallback_game
                     game_info.set_option(JOIN_OPTION, 'off')
-                    raise CortexError(JOIN_ERROR, joined_channel_name)
+                    raise CortexError(JOIN_ERROR, game_key[1])
             elif not suppress_join:
                 joined_channel = game_info.get_option(JOIN_OPTION)
                 if joined_channel and joined_channel != 'on' and joined_channel != 'off':
                     fallback_game = game_info
                     game_info = None
-                    game_key = [context.guild.id, int(joined_channel)]
+                    game_key = [guild, int(joined_channel)]
         return game_info
 
     def info(self, game, origin_channel):
@@ -1542,7 +1551,7 @@ class Default(Controller):
             logging.error(traceback.format_exc())
             return UNEXPECTED_ERROR
 
-    def option(self, game, options):
+    def option(self, game, options, resolved):
         game.update_activity()
         output = 'No such option.'
 
@@ -1552,7 +1561,7 @@ class Default(Controller):
                 game.set_option(BEST_OPTION, argument)
                 output = 'Option to suggest best total and effect is now {0}.'.format(argument)
             elif options[0]['name'] == JOIN_OPTION:
-                if options[0]['name'][0]['name'] == 'switch':
+                if options[0]['options'][0]['name'] == 'switch':
                     if argument == 'on':
                         game.set_option(JOIN_OPTION, 'on')
                         output = 'Other channels may now join this channel.'
@@ -1561,8 +1570,9 @@ class Default(Controller):
                         output = 'This channel now does not join or accept joins from other channels.'
                 else:
                     game.set_option(JOIN_OPTION, argument)
-                    joined_game = self.get_game_info(ctx)
-                    output = 'Joining the #{0} channel.'.format(argument)
+                    joined_channel = resolved['channels'][argument]['name']
+                    joined_game = self.get_game_info(game.get_server(), argument)
+                    output = 'Joining the #{0} channel.'.format(joined_channel)
             return output
         except CortexError as err:
             return err
