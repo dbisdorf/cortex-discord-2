@@ -6,8 +6,6 @@
 # End feedback with periods?
 # remove debug messages
 # Safeties for "keep" option
-# Constrain all numbers to 1 or higher
-# Help should include sample commands
 # Test purge
 # Test join
 
@@ -72,7 +70,9 @@ HELP_TEXT = (
     'stress Adjust stress.\n'
     'xp     Award experience points.\n'
     'help   Provides command hints.\n'
-    'Also try using help to show hints for specific commands (like /help command:asset).```'
+    'Also try using help to show hints for specific commands (like /help command:asset).'
+    '\n'
+    'For more information about this project: https://github.com/dbisdorf/cortex-discord-2```'
 )
 
 ASSET_HELP_TEXT = (
