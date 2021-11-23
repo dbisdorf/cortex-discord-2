@@ -1200,27 +1200,29 @@ class Default(Controller):
         fallback_game = None
         game_key = [guild, channel]
         joined_channel = None
+        joined_channel_name = None
         while not game_info:
             logging.debug('get_game_info searching server {0} channel {1}'.format(game_key[0], game_key[1]))
             game_info = CortexGame(self.db, game_key[0], game_key[1])
             logging.debug('game join option is {0}'.format(game_info.get_option(JOIN_OPTION)))
             if joined_channel:
                 if game_info.get_option(JOIN_OPTION) != 'on':
-                    joined_channel_name = 'other'
                     """
+                    joined_channel_name = 'other'
                     for channel in context.guild.channels:
                         if channel.id == game_key[1]:
                             joined_channel_name = channel.name
                     """
                     game_info = fallback_game
                     game_info.set_option(JOIN_OPTION, 'off')
-                    raise CortexError(JOIN_ERROR, game_key[1])
+                    raise CortexError(JOIN_ERROR, joined_channel_name)
             elif not suppress_join:
                 joined_channel = game_info.get_option(JOIN_OPTION)
                 if joined_channel and joined_channel != 'on' and joined_channel != 'off':
                     fallback_game = game_info
                     game_info = None
-                    game_key = [guild, int(joined_channel)]
+                    joined_channel_name = joined_channel.partition(':')[0]
+                    game_key = [guild, int(joined_channel.partition(':')[2])]
         return game_info
 
     def info(self, game, origin_channel):
@@ -1506,9 +1508,9 @@ class Default(Controller):
                     game.set_option(JOIN_OPTION, 'off')
                     output = 'This channel now does not join or accept joins from other channels.'
             else:
-                game.set_option(JOIN_OPTION, argument)
                 joined_channel = resolved['channels'][argument]['name']
-                joined_game = self.get_game_info(game.get_server(), argument)
+                game.set_option(JOIN_OPTION, '{0}:{1}'.format(joined_channel, argument))
+                joined_game = self.get_game_info(game.get_server(), game.get_channel())
                 output = 'Joining the #{0} channel.'.format(joined_channel)
         return output
 
