@@ -8,10 +8,9 @@
 # Safeties for "keep" option
 # Test purge
 # Test join
-# Looks like there really are autocomplete features
 
 # USER SUGGESTIONS
-# Can I feed stuff to the autosuggest (like "Physical" stress if it's in the game?)
+# Feed stuff to the autosuggest (like "Physical" stress if it's in the game?)
 
 from endpoints import Controller, AccessDenied
 from discord_interactions import verify_key, InteractionType, InteractionResponseType
@@ -1142,46 +1141,52 @@ class Default(Controller):
                 logger.info('Responding to PING')
                 response = DiscordResponsePong()
             else:
-                self.db = sqlite3.connect(config['database']['file'])
-                self.db.row_factory = sqlite3.Row
-                self.roller = Roller(self.db)
-                game = self.get_game_info(kwargs['guild_id'], kwargs['channel_id'])
-                response_text = ''
+                try:
+                    self.db = sqlite3.connect(config['database']['file'])
+                    self.db.row_factory = sqlite3.Row
+                    self.roller = Roller(self.db)
+                    game = self.get_game_info(kwargs['guild_id'], kwargs['channel_id'])
+                    response_text = ''
 
-                if kwargs['data']['name'] == 'info':
-                    response_text = self.info(game, kwargs['channel_id'])
-                elif kwargs['data']['name'] == 'pin':
-                    response_text = self.pin(game)
-                elif kwargs['data']['name'] == 'comp':
-                    response_text = self.comp(game, kwargs['data']['options'])
-                elif kwargs['data']['name'] == 'pp':
-                    response_text = self.pp(game, kwargs['data']['options'])
-                elif kwargs['data']['name'] == 'roll':
-                    response_text = self.roll(game, kwargs['data']['options'])
-                elif kwargs['data']['name'] == 'pool':
-                    response_text = self.pool(game, kwargs['data']['options'])
-                elif kwargs['data']['name'] == 'stress':
-                    response_text = self.stress(game, kwargs['data']['options'])
-                elif kwargs['data']['name'] == 'asset':
-                    response_text = self.asset(game, kwargs['data']['options'])
-                elif kwargs['data']['name'] == 'xp':
-                    response_text = self.xp(game, kwargs['data']['options'])
-                elif kwargs['data']['name'] == 'clean':
-                    response_text = self.clean(game)
-                elif kwargs['data']['name'] == 'report':
-                    response_text = self.report()
-                elif kwargs['data']['name'] == 'option':
-                    resolved = None
-                    if 'resolved' in kwargs['data']:
-                        resolved = kwargs['data']['resolved']
-                    response_text = self.option(game, kwargs['data']['options'], resolved)
-                elif kwargs['data']['name'] == 'help':
-                    if 'options' in kwargs['data']:
-                        response_text = self.help(kwargs['data']['options'])
+                    if kwargs['data']['name'] == 'info':
+                        response_text = self.info(game, kwargs['channel_id'])
+                    elif kwargs['data']['name'] == 'pin':
+                        response_text = self.pin(game)
+                    elif kwargs['data']['name'] == 'comp':
+                        response_text = self.comp(game, kwargs['data']['options'])
+                    elif kwargs['data']['name'] == 'pp':
+                        response_text = self.pp(game, kwargs['data']['options'])
+                    elif kwargs['data']['name'] == 'roll':
+                        response_text = self.roll(game, kwargs['data']['options'])
+                    elif kwargs['data']['name'] == 'pool':
+                        response_text = self.pool(game, kwargs['data']['options'])
+                    elif kwargs['data']['name'] == 'stress':
+                        response_text = self.stress(game, kwargs['data']['options'])
+                    elif kwargs['data']['name'] == 'asset':
+                        response_text = self.asset(game, kwargs['data']['options'])
+                    elif kwargs['data']['name'] == 'xp':
+                        response_text = self.xp(game, kwargs['data']['options'])
+                    elif kwargs['data']['name'] == 'clean':
+                        response_text = self.clean(game)
+                    elif kwargs['data']['name'] == 'report':
+                        response_text = self.report()
+                    elif kwargs['data']['name'] == 'option':
+                        resolved = None
+                        if 'resolved' in kwargs['data']:
+                            resolved = kwargs['data']['resolved']
+                        response_text = self.option(game, kwargs['data']['options'], resolved)
+                    elif kwargs['data']['name'] == 'help':
+                        if 'options' in kwargs['data']:
+                            response_text = self.help(kwargs['data']['options'])
+                        else:
+                            response_text = self.help()
                     else:
-                        response_text = self.help()
-                else:
-                    response_text = UNKNOWN_COMMAND_ERROR
+                        response_text = UNKNOWN_COMMAND_ERROR
+                except CortexError as err:
+                    response_text = err
+                except:
+                    logging.error(traceback.format_exc())
+                    response_text = UNEXPECTED_ERROR
                 response = DiscordResponse(response_text)
         else:
             raise AccessDenied()
@@ -1196,7 +1201,9 @@ class Default(Controller):
         game_key = [guild, channel]
         joined_channel = None
         while not game_info:
+            logging.debug('get_game_info searching server {0} channel {1}'.format(game_key[0], game_key[1]))
             game_info = CortexGame(self.db, game_key[0], game_key[1])
+            logging.debug('game join option is {0}'.format(game_info.get_option(JOIN_OPTION)))
             if joined_channel:
                 if game_info.get_option(JOIN_OPTION) != 'on':
                     joined_channel_name = 'other'
@@ -1219,366 +1226,291 @@ class Default(Controller):
     def info(self, game, origin_channel):
         """Display all game information."""
 
-        try:
-            game.update_activity()
-            output = game.output()
-            if game.get_channel() != origin_channel:
-                output = output.replace(GAME_INFO_HEADER, GAME_INFO_HEADER + '\n(from joined channel)')
-                '''
-                for channel in ctx.guild.channels:
-                    if channel.id == game.get_channel():
-                        output = output.replace(GAME_INFO_HEADER, GAME_INFO_HEADER + '\n(from channel #{0})'.format(channel.name))
-                '''
-            return output
-        except CortexError as err:
-            return err
-        except:
-            logging.error(traceback.format_exc())
-            return UNEXPECTED_ERROR
+        game.update_activity()
+        output = game.output()
+        if game.get_channel() != origin_channel:
+            output = output.replace(GAME_INFO_HEADER, GAME_INFO_HEADER + '\n(from joined channel)')
+            '''
+            for channel in ctx.guild.channels:
+                if channel.id == game.get_channel():
+                    output = output.replace(GAME_INFO_HEADER, GAME_INFO_HEADER + '\n(from channel #{0})'.format(channel.name))
+            '''
+        return output
 
     def pin(self, game):
-        try:
-            game.update_activity()
-            output = game.output()
-            game.pin_info(output, True)
-            return 'Game information pinned.'
-        except CortexError as err:
-            return err
-        except:
-            logging.error(traceback.format_exc())
-            return UNEXPECTED_ERROR
+        game.update_activity()
+        output = game.output()
+        game.pin_info(output, True)
+        return 'Game information pinned.'
 
     def comp(self, game, options):
         logging.debug("comp command invoked")
-        try:
-            update_pin = True
-            output = ''
-            game.update_activity()
-            owner_name = None
-            comp_name = None
-            dice = None
-            steps = 1
-            for option in options[0]['options']:
-                if option['name'] == 'who':
-                    owner_name = capitalize_words(option['value'])
-                elif option['name'] == 'what':
-                    comp_name = capitalize_words(option['value'])
-                elif option['name'] == 'die':
-                    dice = parse_string_into_dice(option['value'])
-                elif option['name'] == 'steps':
-                    steps = option['value']
-                    if steps < 1:
-                        raise CortexError(LOW_NUMBER_ERROR, 'Steps')
-            if options[0]['name'] == 'add':
-                if not dice:
-                    raise CortexError(DIE_MISSING_ERROR)
-                elif len(dice) > 1:
-                    raise CortexError(DIE_EXCESS_ERROR)
-                elif dice[0].qty > 1:
-                    raise CortexError(DIE_EXCESS_ERROR)
-                output = '{0} ({1})'.format(game.complications.add(owner_name, comp_name, dice[0]), owner_name)
-            elif options[0]['name'] == 'remove':
-                output = '{0} ({1})'.format(game.complications.remove(owner_name, comp_name), owner_name)
-            elif options[0]['name'] == 'stepup':
-                output = '{0} ({1})'.format(game.complications.step_up(owner_name, comp_name, steps), owner_name)
-            elif options[0]['name'] == 'stepdown':
-                output = '{0} ({1})'.format(game.complications.step_down(owner_name, comp_name, steps), owner_name)
-            else:
-                update_pin = False
-                raise CortexError(INSTRUCTION_ERROR, options[0], 'comp')
-            if update_pin and game.has_pin():
-                game.pin_info(game.output())
-            return output
-        except CortexError as err:
-            return err
-        except:
-            logging.error(traceback.format_exc())
-            return UNEXPECTED_ERROR
+        update_pin = True
+        output = ''
+        game.update_activity()
+        owner_name = None
+        comp_name = None
+        dice = None
+        steps = 1
+        for option in options[0]['options']:
+            if option['name'] == 'who':
+                owner_name = capitalize_words(option['value'])
+            elif option['name'] == 'what':
+                comp_name = capitalize_words(option['value'])
+            elif option['name'] == 'die':
+                dice = parse_string_into_dice(option['value'])
+            elif option['name'] == 'steps':
+                steps = option['value']
+                if steps < 1:
+                    raise CortexError(LOW_NUMBER_ERROR, 'Steps')
+        if options[0]['name'] == 'add':
+            if not dice:
+                raise CortexError(DIE_MISSING_ERROR)
+            elif len(dice) > 1:
+                raise CortexError(DIE_EXCESS_ERROR)
+            elif dice[0].qty > 1:
+                raise CortexError(DIE_EXCESS_ERROR)
+            output = '{0} ({1})'.format(game.complications.add(owner_name, comp_name, dice[0]), owner_name)
+        elif options[0]['name'] == 'remove':
+            output = '{0} ({1})'.format(game.complications.remove(owner_name, comp_name), owner_name)
+        elif options[0]['name'] == 'stepup':
+            output = '{0} ({1})'.format(game.complications.step_up(owner_name, comp_name, steps), owner_name)
+        elif options[0]['name'] == 'stepdown':
+            output = '{0} ({1})'.format(game.complications.step_down(owner_name, comp_name, steps), owner_name)
+        else:
+            update_pin = False
+            raise CortexError(INSTRUCTION_ERROR, options[0], 'comp')
+        if update_pin and game.has_pin():
+            game.pin_info(game.output())
+        return output
 
     def pp(self, game, options):
         logging.debug("pp command invoked")
-        try:
-            output = ''
-            update_pin = True
-            game.update_activity()
-            char_name = capitalize_words(options[0]['options'][0]['value'])
-            qty = 1
-            if len(options[0]['options']) > 1:
-                qty = options[0]['options'][1]['value']
-                if qty < 1:
-                    raise CortexError(LOW_NUMBER_ERROR, 'Number')
-            if options[0]['name'] == 'add':
-                output = 'Plot points for {0} (added {1})'.format(game.plot_points.add(char_name, qty), qty)
-            elif options[0]['name'] == 'remove':
-                output = 'Plot points for {0} (removed {1})'.format(game.plot_points.remove(char_name, qty), qty)
-            elif options[0]['name'] == 'clear':
-                output = game.plot_points.clear(char_name)
-            else:
-                update_pin = False
-                raise CortexError(INSTRUCTION_ERROR, options[0], 'pp')
-            if update_pin and game.has_pin():
-                game.pin_info(game.output())
-            return output
-        except CortexError as err:
-            return err
-        except:
-            logging.error(traceback.format_exc())
-            return UNEXPECTED_ERROR
+        output = ''
+        update_pin = True
+        game.update_activity()
+        char_name = capitalize_words(options[0]['options'][0]['value'])
+        qty = 1
+        if len(options[0]['options']) > 1:
+            qty = options[0]['options'][1]['value']
+            if qty < 1:
+                raise CortexError(LOW_NUMBER_ERROR, 'Number')
+        if options[0]['name'] == 'add':
+            output = 'Plot points for {0} (added {1})'.format(game.plot_points.add(char_name, qty), qty)
+        elif options[0]['name'] == 'remove':
+            output = 'Plot points for {0} (removed {1})'.format(game.plot_points.remove(char_name, qty), qty)
+        elif options[0]['name'] == 'clear':
+            output = game.plot_points.clear(char_name)
+        else:
+            update_pin = False
+            raise CortexError(INSTRUCTION_ERROR, options[0], 'pp')
+        if update_pin and game.has_pin():
+            game.pin_info(game.output())
+        return output
 
     def roll(self, game, options):
         logging.debug("roll command invoked")
         results = {}
-        try:
-            if game.get_option_as_bool(BEST_OPTION):
-                suggest_best = 2
-            else:
-                suggest_best = None
-            for option in options:
-                if option['name'] == 'dice':
-                    dice = parse_string_into_dice(option['value'])
-                if option['name'] == 'keep' and suggest_best:
-                    suggest_best = option['value']
-                    if suggest_best < 1:
-                        raise CortexError(LOW_NUMBER_ERROR, 'Dice kept')
-            if len(dice) == 0:
-               raise CortexError(DIE_MISSING_ERROR) 
-            pool = DicePool(None, incoming_dice=dice)
-            echo = convert_to_capitals_and_dice(options[0]['value'])
-            return 'Rolling: {0}\n{1}'.format(echo, pool.roll(self.roller, suggest_best))
-        except CortexError as err:
-            return err
-        except:
-            logging.error(traceback.format_exc())
-            return UNEXPECTED_ERROR
+        if game.get_option_as_bool(BEST_OPTION):
+            suggest_best = 2
+        else:
+            suggest_best = None
+        for option in options:
+            if option['name'] == 'dice':
+                dice = parse_string_into_dice(option['value'])
+            if option['name'] == 'keep' and suggest_best:
+                suggest_best = option['value']
+                if suggest_best < 1:
+                    raise CortexError(LOW_NUMBER_ERROR, 'Dice kept')
+        if len(dice) == 0:
+           raise CortexError(DIE_MISSING_ERROR) 
+        pool = DicePool(None, incoming_dice=dice)
+        echo = convert_to_capitals_and_dice(options[0]['value'])
+        return 'Rolling: {0}\n{1}'.format(echo, pool.roll(self.roller, suggest_best))
 
     def pool(self, game, options):
         logging.debug("pool command invoked")
-        try:
-            output = ''
-            update_pin = True
-            game.update_activity()
-            if game.get_option_as_bool(BEST_OPTION):
-                suggest_best = 2
-            else:
-                suggest_best = None
-            dice = None
-            for option in options[0]['options']:
-                if option['name'] == 'name':
-                    pool_name = capitalize_words(option['value']) 
-                if option['name'] == 'dice':
-                    dice = parse_string_into_dice(option['value'])
-                if option['name'] == 'keep' and suggest_best:
-                    suggest_best = option['value']
-                    if suggest_best < 1:
-                        raise CortexError(LOW_NUMBER_ERROR, 'Dice kept')
-            if options[0]['name'] in ['add', 'remove'] and not dice:
-                raise CortexError(DIE_MISSING_ERROR)
-            if options[0]['name'] == 'add':
-                output = game.pools.add(pool_name, dice)
-            elif options[0]['name'] == 'remove':
-                output = game.pools.remove(pool_name, dice)
-            elif options[0]['name'] == 'clear':
-                output = game.pools.clear(pool_name)
-            elif options[0]['name'] == 'roll':
-                update_pin = False
-                temp_pool = game.pools.temporary_copy(pool_name)
-                output = 'Rolling: {0} pool\n'.format(pool_name)
-                if dice:
-                    temp_pool.add(dice)
-                    output += '(added {0} for this roll)\n'.format(list_of_dice(dice))
-                output += temp_pool.roll(self.roller, suggest_best)
-            else:
-                update_pin = False
-                raise CortexError(INSTRUCTION_ERROR, options[0]['name'], 'pool')
-            if update_pin and game.has_pin():
-                game.pin_info(game.output())
-            return output
-        except CortexError as err:
-            return err
-        except:
-            logging.error(traceback.format_exc())
-            return UNEXPECTED_ERROR
+        output = ''
+        update_pin = True
+        game.update_activity()
+        if game.get_option_as_bool(BEST_OPTION):
+            suggest_best = 2
+        else:
+            suggest_best = None
+        dice = None
+        for option in options[0]['options']:
+            if option['name'] == 'name':
+                pool_name = capitalize_words(option['value']) 
+            if option['name'] == 'dice':
+                dice = parse_string_into_dice(option['value'])
+            if option['name'] == 'keep' and suggest_best:
+                suggest_best = option['value']
+                if suggest_best < 1:
+                    raise CortexError(LOW_NUMBER_ERROR, 'Dice kept')
+        if options[0]['name'] in ['add', 'remove'] and not dice:
+            raise CortexError(DIE_MISSING_ERROR)
+        if options[0]['name'] == 'add':
+            output = game.pools.add(pool_name, dice)
+        elif options[0]['name'] == 'remove':
+            output = game.pools.remove(pool_name, dice)
+        elif options[0]['name'] == 'clear':
+            output = game.pools.clear(pool_name)
+        elif options[0]['name'] == 'roll':
+            update_pin = False
+            temp_pool = game.pools.temporary_copy(pool_name)
+            output = 'Rolling: {0} pool\n'.format(pool_name)
+            if dice:
+                temp_pool.add(dice)
+                output += '(added {0} for this roll)\n'.format(list_of_dice(dice))
+            output += temp_pool.roll(self.roller, suggest_best)
+        else:
+            update_pin = False
+            raise CortexError(INSTRUCTION_ERROR, options[0]['name'], 'pool')
+        if update_pin and game.has_pin():
+            game.pin_info(game.output())
+        return output
 
     def stress(self, game, options):
         logging.debug("stress command invoked")
-        try:
-            output = ''
-            update_pin = True
-            game.update_activity()
-            dice = None
-            owner_name = None
-            steps = 1
-            stress_name = UNTYPED_STRESS
-            for option in options[0]['options']:
-                if option['name'] == 'who':
-                    owner_name = capitalize_words(option['value'])
-                elif option['name'] == 'what':
-                    stress_name = capitalize_words(option['value'])
-                elif option['name'] == 'die':
-                    dice = parse_string_into_dice(option['value'])
-                elif option['name'] == 'steps':
-                    steps = option['value']
-                    if steps < 1:
-                        raise CortexError(LOW_NUMBER_ERROR, 'Steps')
-            if options[0]['name'] == 'add':
-                if not dice:
-                    raise CortexError(DIE_MISSING_ERROR)
-                elif len(dice) > 1:
-                    raise CortexError(DIE_EXCESS_ERROR)
-                elif dice[0].qty > 1:
-                    raise CortexError(DIE_EXCESS_ERROR)
-                output = '{0} ({1})'.format(game.stress.add(owner_name, stress_name, dice[0]), owner_name)
-            elif options[0]['name'] == 'remove':
-                output = '{0} ({1})'.format(game.stress.remove(owner_name, stress_name), owner_name)
-            elif options[0]['name'] == 'stepup':
-                output = '{0} ({1})'.format(game.stress.step_up(owner_name, stress_name, steps), owner_name)
-            elif options[0]['name'] == 'stepdown':
-                output = '{0} ({1})'.format(game.stress.step_down(owner_name, stress_name, steps), owner_name)
-            elif options[0]['name'] == 'clear':
-                output = game.stress.clear(owner_name)
-            else:
-                update_pin = False
-                raise CortexError(INSTRUCTION_ERROR, options[0]['name'], 'stress')
-            if update_pin and game.has_pin():
-                game.pin_info(game.output())
-            return output
-        except CortexError as err:
-            return err
-        except:
-            logging.error(traceback.format_exc())
-            return UNEXPECTED_ERROR
+        output = ''
+        update_pin = True
+        game.update_activity()
+        dice = None
+        owner_name = None
+        steps = 1
+        stress_name = UNTYPED_STRESS
+        for option in options[0]['options']:
+            if option['name'] == 'who':
+                owner_name = capitalize_words(option['value'])
+            elif option['name'] == 'what':
+                stress_name = capitalize_words(option['value'])
+            elif option['name'] == 'die':
+                dice = parse_string_into_dice(option['value'])
+            elif option['name'] == 'steps':
+                steps = option['value']
+                if steps < 1:
+                    raise CortexError(LOW_NUMBER_ERROR, 'Steps')
+        if options[0]['name'] == 'add':
+            if not dice:
+                raise CortexError(DIE_MISSING_ERROR)
+            elif len(dice) > 1:
+                raise CortexError(DIE_EXCESS_ERROR)
+            elif dice[0].qty > 1:
+                raise CortexError(DIE_EXCESS_ERROR)
+            output = '{0} ({1})'.format(game.stress.add(owner_name, stress_name, dice[0]), owner_name)
+        elif options[0]['name'] == 'remove':
+            output = '{0} ({1})'.format(game.stress.remove(owner_name, stress_name), owner_name)
+        elif options[0]['name'] == 'stepup':
+            output = '{0} ({1})'.format(game.stress.step_up(owner_name, stress_name, steps), owner_name)
+        elif options[0]['name'] == 'stepdown':
+            output = '{0} ({1})'.format(game.stress.step_down(owner_name, stress_name, steps), owner_name)
+        elif options[0]['name'] == 'clear':
+            output = game.stress.clear(owner_name)
+        else:
+            update_pin = False
+            raise CortexError(INSTRUCTION_ERROR, options[0]['name'], 'stress')
+        if update_pin and game.has_pin():
+            game.pin_info(game.output())
+        return output
 
     def asset(self, game, options):
         logging.debug("asset command invoked")
         output = ''
-        try:
-            output = ''
-            update_pin = True
-            game.update_activity()
-            owner_name = None
-            asset_name = None
-            dice = None
-            steps = 1
-            for option in options[0]['options']:
-                if option['name'] == 'who':
-                    owner_name = capitalize_words(option['value'])
-                elif option['name'] == 'what':
-                    asset_name = capitalize_words(option['value'])
-                elif option['name'] == 'die':
-                    dice = parse_string_into_dice(option['value'])
-                elif option['name'] == 'steps':
-                    steps = option['value']
-                    if steps < 1:
-                        raise CortexError(LOW_NUMBER_ERROR, 'Steps')
-            if options[0]['name'] == 'add':
-                if not dice:
-                    raise CortexError(DIE_MISSING_ERROR)
-                elif len(dice) > 1:
-                    raise CortexError(DIE_EXCESS_ERROR)
-                elif dice[0].qty > 1:
-                    raise CortexError(DIE_EXCESS_ERROR)
-                output = '{0} ({1})'.format(game.assets.add(owner_name, asset_name, dice[0]), owner_name)
-            elif options[0]['name'] == 'remove':
-                output = '{0} ({1})'.format(game.assets.remove(owner_name, asset_name), owner_name)
-            elif options[0]['name'] == 'stepup':
-                output = '{0} ({1})'.format(game.assets.step_up(owner_name, asset_name, steps), owner_name)
-            elif options[0]['name'] == 'stepdown':
-                output = '{0} ({1})'.format(game.assets.step_down(owner_name, asset_name, steps), owner_name)
-            else:
-                update_pin = False
-                raise CortexError(INSTRUCTION_ERROR, options[0]['name'], 'asset')
-            if update_pin and game.has_pin():
-                game.pin_info(game.output())
-            return output
-        except CortexError as err:
-            return err
-        except:
-            logging.error(traceback.format_exc())
-            return UNEXPECTED_ERROR
+        update_pin = True
+        game.update_activity()
+        owner_name = None
+        asset_name = None
+        dice = None
+        steps = 1
+        for option in options[0]['options']:
+            if option['name'] == 'who':
+                owner_name = capitalize_words(option['value'])
+            elif option['name'] == 'what':
+                asset_name = capitalize_words(option['value'])
+            elif option['name'] == 'die':
+                dice = parse_string_into_dice(option['value'])
+            elif option['name'] == 'steps':
+                steps = option['value']
+                if steps < 1:
+                    raise CortexError(LOW_NUMBER_ERROR, 'Steps')
+        if options[0]['name'] == 'add':
+            if not dice:
+                raise CortexError(DIE_MISSING_ERROR)
+            elif len(dice) > 1:
+                raise CortexError(DIE_EXCESS_ERROR)
+            elif dice[0].qty > 1:
+                raise CortexError(DIE_EXCESS_ERROR)
+            output = '{0} ({1})'.format(game.assets.add(owner_name, asset_name, dice[0]), owner_name)
+        elif options[0]['name'] == 'remove':
+            output = '{0} ({1})'.format(game.assets.remove(owner_name, asset_name), owner_name)
+        elif options[0]['name'] == 'stepup':
+            output = '{0} ({1})'.format(game.assets.step_up(owner_name, asset_name, steps), owner_name)
+        elif options[0]['name'] == 'stepdown':
+            output = '{0} ({1})'.format(game.assets.step_down(owner_name, asset_name, steps), owner_name)
+        else:
+            update_pin = False
+            raise CortexError(INSTRUCTION_ERROR, options[0]['name'], 'asset')
+        if update_pin and game.has_pin():
+            game.pin_info(game.output())
+        return output
 
     def xp(self, game, options):
         logging.debug("xp command invoked")
-        try:
-            output = ''
-            update_pin = True
-            game.update_activity()
-            xp_name = capitalize_words(options[0]['options'][0]['value'])
-            qty = 1
-            if len(options[0]['options']) > 1:
-                qty = options[0]['options'][1]['value']
-                if qty < 1:
-                    raise CortexError(LOW_NUMBER_ERROR, 'Number')
-            if options[0]['name'] == 'add':
-                output = 'Experience points for {0} (added {1})'.format(game.xp.add(xp_name, qty), qty)
-            elif options[0]['name'] == 'remove':
-                output = 'Experience points for {0} (removed {1})'.format(game.xp.remove(xp_name, qty), qty)
-            elif options[0]['name'] == 'clear':
-                output = game.xp.clear(xp_name)
-            else:
-                update_pin = False
-                raise CortexError(INSTRUCTION_ERROR, options[0]['name'], 'xp')
-            if update_pin and game.has_pin():
-                game.pin_info(game.output())
-            return output
-        except CortexError as err:
-            return err
-        except:
-            logging.error(traceback.format_exc())
-            return UNEXPECTED_ERROR
-
+        output = ''
+        update_pin = True
+        game.update_activity()
+        xp_name = capitalize_words(options[0]['options'][0]['value'])
+        qty = 1
+        if len(options[0]['options']) > 1:
+            qty = options[0]['options'][1]['value']
+            if qty < 1:
+                raise CortexError(LOW_NUMBER_ERROR, 'Number')
+        if options[0]['name'] == 'add':
+            output = 'Experience points for {0} (added {1})'.format(game.xp.add(xp_name, qty), qty)
+        elif options[0]['name'] == 'remove':
+            output = 'Experience points for {0} (removed {1})'.format(game.xp.remove(xp_name, qty), qty)
+        elif options[0]['name'] == 'clear':
+            output = game.xp.clear(xp_name)
+        else:
+            update_pin = False
+            raise CortexError(INSTRUCTION_ERROR, options[0]['name'], 'xp')
+        if update_pin and game.has_pin():
+            game.pin_info(game.output())
+        return output
 
     def clean(self, game):
         logging.debug("clean command invoked")
-        try:
-            game.update_activity()
-            game.clean()
-            return 'Cleaned up all game information.'
-        except CortexError as err:
-            return err
-        except:
-            logging.error(traceback.format_exc())
-            return UNEXPECTED_ERROR
+        game.update_activity()
+        game.clean()
+        return 'Cleaned up all game information.'
 
     def report(self):
         logging.debug("report command invoked")
-        try:
-            output = '**CortexPal Usage Report**\n'
-            output += self.roller.output()
-            return output
-        except CortexError as err:
-            return err
-        except:
-            logging.error(traceback.format_exc())
-            return UNEXPECTED_ERROR
+        output = '**CortexPal Usage Report**\n'
+        output += self.roller.output()
+        return output
 
     def option(self, game, options, resolved):
         game.update_activity()
         output = 'No such option.'
-
-        try:
-            argument = options[0]['options'][0]['value']
-            if options[0]['name'] == BEST_OPTION:
-                game.set_option(BEST_OPTION, argument)
-                output = 'Option to suggest best total and effect is now {0}.'.format(argument)
-            elif options[0]['name'] == JOIN_OPTION:
-                if options[0]['options'][0]['name'] == 'switch':
-                    if argument == 'on':
-                        game.set_option(JOIN_OPTION, 'on')
-                        output = 'Other channels may now join this channel.'
-                    elif argument == 'off':
-                        game.set_option(JOIN_OPTION, 'off')
-                        output = 'This channel now does not join or accept joins from other channels.'
-                else:
-                    game.set_option(JOIN_OPTION, argument)
-                    joined_channel = resolved['channels'][argument]['name']
-                    joined_game = self.get_game_info(game.get_server(), argument)
-                    output = 'Joining the #{0} channel.'.format(joined_channel)
-            return output
-        except CortexError as err:
-            return err
-        except:
-            logging.error(traceback.format_exc())
-            return UNEXPECTED_ERROR
+        argument = options[0]['options'][0]['value']
+        if options[0]['name'] == BEST_OPTION:
+            game.set_option(BEST_OPTION, argument)
+            output = 'Option to suggest best total and effect is now {0}.'.format(argument)
+        elif options[0]['name'] == JOIN_OPTION:
+            if options[0]['options'][0]['name'] == 'switch':
+                if argument == 'on':
+                    game.set_option(JOIN_OPTION, 'on')
+                    output = 'Other channels may now join this channel.'
+                elif argument == 'off':
+                    game.set_option(JOIN_OPTION, 'off')
+                    output = 'This channel now does not join or accept joins from other channels.'
+            else:
+                game.set_option(JOIN_OPTION, argument)
+                joined_channel = resolved['channels'][argument]['name']
+                joined_game = self.get_game_info(game.get_server(), argument)
+                output = 'Joining the #{0} channel.'.format(joined_channel)
+        return output
 
     def help(self, options=[]):
         if options:
