@@ -1,11 +1,10 @@
 # TODO
 # What do we pass to command functions? DB? Cursor? Game object? Roller?
-# Should the command functions just return a string? instead of an object
 # Required permissions = bot, application.commands, manage messages
 # Comments / documentation
 # End feedback with periods?
-# remove debug messages
 # Safeties for "keep" option
+# README
 
 # USER SUGGESTIONS
 # Feed stuff to the autosuggest (like "Physical" stress if it's in the game?)
