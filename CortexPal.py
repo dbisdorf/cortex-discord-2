@@ -6,8 +6,6 @@
 # End feedback with periods?
 # remove debug messages
 # Safeties for "keep" option
-# Test purge
-# Test join
 
 # USER SUGGESTIONS
 # Feed stuff to the autosuggest (like "Physical" stress if it's in the game?)
@@ -876,7 +874,7 @@ class GroupedNamedDice:
         """Remove dice with a given name from a given group."""
 
         if not group in self.groups:
-            raise CortexError(HAS_NONE_ERROR, group, self.category)
+            raise CortexError(HAS_NONE_ERROR, group, self.category + ' dice')
         output = self.groups[group].remove(name)
         if self.groups[group].is_empty():
             self.groups[group].remove_from_db()
@@ -887,7 +885,7 @@ class GroupedNamedDice:
         """Remove all dice from a given group."""
 
         if not group in self.groups:
-            raise CortexError(HAS_NONE_ERROR, group, self.category)
+            raise CortexError(HAS_NONE_ERROR, group, self.category + ' dice')
         self.groups[group].remove_from_db()
         del self.groups[group]
         return 'Cleared all {0} for {1}.'.format(self.category, group)
@@ -896,14 +894,14 @@ class GroupedNamedDice:
         """Step up the die with a given name, within a given group."""
 
         if not group in self.groups:
-            raise CortexError(HAS_NONE_ERROR, group, self.category)
+            raise CortexError(HAS_NONE_ERROR, group, self.category + ' dice')
         return self.groups[group].step_up(name, steps)
 
     def step_down(self, group, name, steps=1):
         """Step down the die with a given name, within a given group."""
 
         if not group in self.groups:
-            raise CortexError(HAS_NONE_ERROR, group, self.category)
+            raise CortexError(HAS_NONE_ERROR, group, self.category + ' dice')
         output = self.groups[group].step_down(name, steps)
         if self.groups[group].is_empty():
             self.groups[group].remove_from_db()
@@ -1096,7 +1094,6 @@ class Roller:
         while fetching:
             row = self.cursor.fetchone()
             if row:
-                logging.debug('faces {0} result {1} tally {2}'.format(row['FACES'], row['RESULT'], row['TALLY']))
                 results[row['FACES']][row['RESULT'] - 1] += row['TALLY']
             else:
                 fetching = False
@@ -1202,9 +1199,7 @@ class Default(Controller):
         joined_channel = None
         joined_channel_name = None
         while not game_info:
-            logging.debug('get_game_info searching server {0} channel {1}'.format(game_key[0], game_key[1]))
             game_info = CortexGame(self.db, game_key[0], game_key[1])
-            logging.debug('game join option is {0}'.format(game_info.get_option(JOIN_OPTION)))
             if joined_channel:
                 if game_info.get_option(JOIN_OPTION) != 'on':
                     """
