@@ -1,13 +1,13 @@
 import logging
 import logging.handlers
 import configparser
-import datetime
 import sqlite3
-
-PURGE_DAYS = 180
+from datetime import datetime, timedelta, timezone
 
 config = configparser.ConfigParser()
 config.read('cortexpal.ini')
+
+purge_days = int(config['purge']['days'])
 
 logHandler = logging.handlers.TimedRotatingFileHandler(filename=config['logging']['file'], when='D', backupCount=9)
 logging.basicConfig(handlers=[logHandler], format='%(asctime)s %(message)s', level=logging.INFO)
@@ -17,7 +17,7 @@ db.row_factory = sqlite3.Row
 cursor = db.cursor()
 
 logging.info('Running the purge')
-purge_time = datetime.now(timezone.utc) - timedelta(days=PURGE_DAYS)
+purge_time = datetime.now(timezone.utc) - timedelta(days=purge_days)
 games_to_purge = []
 cursor.execute('SELECT * FROM GAME WHERE ACTIVITY<:purge_time', {'purge_time':purge_time})
 fetching = True
