@@ -740,7 +740,7 @@ class DicePools:
         output = ''
         prefix = ''
         for key in list(self.pools):
-            output += '{0}{1}: {2}'.format(prefix, key, self.pools[key].output())
+            output += '{0}*{1}*: {2}'.format(prefix, key, self.pools[key].output())
             prefix = '\n'
         return output
 
@@ -812,7 +812,7 @@ class Resources:
     def output(self, name):
         """Return a formatted description of the resources held by a given name."""
 
-        return '{0}: {1}'.format(name, self.resources[name]['qty'])
+        return '*{0}*: {1}'.format(name, self.resources[name]['qty'])
 
     def output_all(self):
         """Return a formatted summary of all resources."""
@@ -908,7 +908,7 @@ class GroupedNamedDice:
 
         if self.groups[group].is_empty():
             return '{0}: None'.format(group)
-        return '{0}: {1}'.format(group, self.groups[group].output_all(separator=', '))
+        return '*{0}*: {1}'.format(group, self.groups[group].output_all(separator=', '))
 
     def output_all(self):
         """Return a formatted summary of all dice under all groups."""
