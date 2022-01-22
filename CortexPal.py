@@ -35,6 +35,7 @@ DIE_EXCESS_ERROR = 'You can\'t use that many dice.'
 DIE_MISSING_ERROR = 'There were no valid dice in that command.'
 DIE_LACK_ERROR = 'That pool only has {0}D{1}.'
 DIE_NONE_ERROR = 'That pool doesn\'t have any D{0}s.'
+DIE_MAX_ERROR = 'You can\'t step up a die past D12.'
 NOT_EXIST_ERROR = 'There\'s no such {0} yet.'
 HAS_NONE_ERROR = '{0} doesn\'t have any {1}.'
 HAS_ONLY_ERROR = '{0} only has {1} {2}.'
@@ -572,6 +573,30 @@ class DicePool:
                 raise CortexError(DIE_NONE_ERROR, die.size)
         return '{0} (removed {1})'.format(self.output(), list_of_dice(dice))
 
+    def step_up(self, die):
+        """Step up a die in the pool."""
+
+        if die.is_max():
+            raise CortexError(DIE_MAX_ERROR)
+        else:
+            self.remove([die])
+            new_die = Die(size=die.size)
+            new_die.step_up()
+            self.add([new_die])
+        return '{0} (stepped up {1} to {2})'.format(self.output(), die, new_die)
+        
+    def step_down(self, die):
+        """Step down a die in the pool."""
+
+        self.remove([die])
+        if die.size >= 6:
+            new_die = Die(size=die.size)
+            new_die.step_down()
+            self.add([new_die])
+            return '{0} (stepped down {1} to {2})'.format(self.output(), die, new_die)
+        else:
+            return '{0} (stepped down and removed {1})'.format(self.output(), die)
+
     def temporary_copy(self):
         """Return a temporary, non-persisted copy of this dice pool."""
         copy = DicePool(self.group)
@@ -713,6 +738,22 @@ class DicePools:
             raise CortexError(NOT_EXIST_ERROR, 'pool')
         self.pools[group].remove(dice)
         return '{0}: {1} (removed {2})'.format(group, self.pools[group].output(), list_of_dice(dice))
+
+    def step_up(self, group, die):
+        """Step up a die in a pool with a given name."""
+
+        if not group in self.pools:
+            raise CortexError(NOT_EXIST_ERROR, 'pool')
+        output = self.pools[group].step_up(die)
+        return '{0}: {1}'.format(group, output)
+
+    def step_down(self, group, die):
+        """Step down a die in a pool with a given name."""
+
+        if not group in self.pools:
+            raise CortexError(NOT_EXIST_ERROR, 'pool')
+        output = self.pools[group].step_down(die)
+        return '{0}: {1}'.format(group, output)
 
     def clear(self, group):
         """Remove one entire pool."""
@@ -1333,18 +1374,24 @@ class Default(Controller):
         for option in options[0]['options']:
             if option['name'] == 'name':
                 pool_name = capitalize_words(option['value']) 
-            if option['name'] == 'dice':
+            if option['name'] == 'dice' or option['name'] == 'die':
                 dice = parse_string_into_dice(option['value'])
             if option['name'] == 'keep' and suggest_best:
                 suggest_best = option['value']
                 if suggest_best < 1:
                     raise CortexError(LOW_NUMBER_ERROR, 'Dice kept')
-        if options[0]['name'] in ['add', 'remove'] and not dice:
+        if options[0]['name'] in ['add', 'remove', 'stepup', 'stepdown'] and not dice:
             raise CortexError(DIE_MISSING_ERROR)
+        if options[0]['name'] in ['stepup', 'stepdown'] and (len(dice) > 1 or dice[0].qty > 1):
+            raise CortexError(DIE_EXCESS_ERROR)
         if options[0]['name'] == 'add':
             output = game.pools.add(pool_name, dice)
         elif options[0]['name'] == 'remove':
             output = game.pools.remove(pool_name, dice)
+        elif options[0]['name'] == 'stepup':
+            output = game.pools.step_up(pool_name, dice[0])
+        elif options[0]['name'] == 'stepdown':
+            output = game.pools.step_down(pool_name, dice[0])
         elif options[0]['name'] == 'clear':
             output = game.pools.clear(pool_name)
         elif options[0]['name'] == 'roll':

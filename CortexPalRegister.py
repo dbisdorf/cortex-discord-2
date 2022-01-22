@@ -13,8 +13,6 @@ headers = {
 
 print(headers)
 
-"""
-
 info_json = {
     "name": "info",
     "type": 1,
@@ -272,6 +270,44 @@ pool_json = {
                 {
                     "name": "dice",
                     "description": "Dice to remove from the pool.",
+                    "type": 3,
+                    "required": True
+                }
+            ]
+        },
+        {
+            "name": "stepup",
+            "description": "Step up one of the dice in a pool.",
+            "type": 1,
+            "options": [
+                {
+                    "name": "name",
+                    "description": "Name of the dice pool.",
+                    "type": 3,
+                    "required": True
+                },
+                {
+                    "name": "die",
+                    "description": "Size of the die to step up.",
+                    "type": 3,
+                    "required": True
+                }
+            ]
+        },
+        {
+            "name": "stepdown",
+            "description": "Step down one of the dice in a pool.",
+            "type": 1,
+            "options": [
+                {
+                    "name": "name",
+                    "description": "Name of the dice pool.",
+                    "type": 3,
+                    "required": True
+                },
+                {
+                    "name": "die",
+                    "description": "Size of the die to step down.",
                     "type": 3,
                     "required": True
                 }
@@ -696,8 +732,6 @@ print("Submitting options")
 r = requests.post(url, headers=headers, json=option_json)
 print(r.text)
 time.sleep(5)
-
-"""
 
 help_json = {
     "name": "help",
