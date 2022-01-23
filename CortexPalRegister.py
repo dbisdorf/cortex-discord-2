@@ -291,6 +291,12 @@ pool_json = {
                     "description": "Size of the die to step up.",
                     "type": 3,
                     "required": True
+                },
+                {
+                    "name": "steps",
+                    "description": "How many steps.",
+                    "type": 4,
+                    "min_value": 1
                 }
             ]
         },
@@ -310,6 +316,12 @@ pool_json = {
                     "description": "Size of the die to step down.",
                     "type": 3,
                     "required": True
+                },
+                {
+                    "name": "steps",
+                    "description": "How many steps.",
+                    "type": 4,
+                    "min_value": 1
                 }
             ]
         },

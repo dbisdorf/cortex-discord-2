@@ -116,12 +116,14 @@ POOL_HELP_TEXT = (
     '```Adjust dice pools.\n'
     '\n'
     'For example:\n'
-    '/pool add name:doom dice:6 2d8    (gives the Doom pool a D6 and 2D8)\n'
-    '/pool remove name:doom dice:10    (spends a D10 from the Doom pool)\n'
-    '/pool roll name:doom              (rolls the Doom pool)\n'
-    '/pool roll name:doom dice:2d6 10  (rolls the Doom pool and adds 2D6 and a D10)\n'
-    '/pool roll name:doom keep:3       (rolls the Doom pool and keeps three dice for the total)\n'
-    '/pool clear name:doom             (clears the entire Doom pool)\n'
+    '/pool add name:doom dice:6 2d8           (gives the Doom pool a D6 and 2D8)\n'
+    '/pool remove name:doom dice:10           (spends a D10 from the Doom pool)\n'
+    '/pool stepup name:doom die:8             (steps up a D8 in the pool to D10)\n'
+    '/pool stepdown name:doom die:12 steps:3  (steps down a D12 in the pool to D6)\n'
+    '/pool roll name:doom                     (rolls the Doom pool)\n'
+    '/pool roll name:doom dice:2d6 10         (rolls the Doom pool and adds 2D6 and a D10)\n'
+    '/pool roll name:doom keep:3              (rolls the Doom pool and keeps three dice for the total)\n'
+    '/pool clear name:doom                    (clears the entire Doom pool)\n'
     'The "keep" option only functions if you\'ve used the "/option" command to tell the bot\n'
     'to suggest the best total and effect dice.\n'
     '\n'
@@ -573,25 +575,25 @@ class DicePool:
                 raise CortexError(DIE_NONE_ERROR, die.size)
         return '{0} (removed {1})'.format(self.output(), list_of_dice(dice))
 
-    def step_up(self, die):
+    def step_up(self, die, steps=1):
         """Step up a die in the pool."""
 
-        if die.is_max():
+        if die.size + (steps * 2) > 12:
             raise CortexError(DIE_MAX_ERROR)
         else:
             self.remove([die])
             new_die = Die(size=die.size)
-            new_die.step_up()
+            new_die.step_up(steps)
             self.add([new_die])
         return '{0} (stepped up {1} to {2})'.format(self.output(), die, new_die)
         
-    def step_down(self, die):
+    def step_down(self, die, steps=1):
         """Step down a die in the pool."""
 
         self.remove([die])
-        if die.size >= 6:
+        if die.size - (steps * 2) >= 4:
             new_die = Die(size=die.size)
-            new_die.step_down()
+            new_die.step_down(steps)
             self.add([new_die])
             return '{0} (stepped down {1} to {2})'.format(self.output(), die, new_die)
         else:
@@ -739,20 +741,20 @@ class DicePools:
         self.pools[group].remove(dice)
         return '{0}: {1} (removed {2})'.format(group, self.pools[group].output(), list_of_dice(dice))
 
-    def step_up(self, group, die):
+    def step_up(self, group, die, steps=1):
         """Step up a die in a pool with a given name."""
 
         if not group in self.pools:
             raise CortexError(NOT_EXIST_ERROR, 'pool')
-        output = self.pools[group].step_up(die)
+        output = self.pools[group].step_up(die, steps)
         return '{0}: {1}'.format(group, output)
 
-    def step_down(self, group, die):
+    def step_down(self, group, die, steps=1):
         """Step down a die in a pool with a given name."""
 
         if not group in self.pools:
             raise CortexError(NOT_EXIST_ERROR, 'pool')
-        output = self.pools[group].step_down(die)
+        output = self.pools[group].step_down(die, steps)
         return '{0}: {1}'.format(group, output)
 
     def clear(self, group):
@@ -1371,12 +1373,17 @@ class Default(Controller):
         else:
             suggest_best = None
         dice = None
+        steps = 1
         for option in options[0]['options']:
             if option['name'] == 'name':
                 pool_name = capitalize_words(option['value']) 
-            if option['name'] == 'dice' or option['name'] == 'die':
+            elif option['name'] == 'dice' or option['name'] == 'die':
                 dice = parse_string_into_dice(option['value'])
-            if option['name'] == 'keep' and suggest_best:
+            elif option['name'] == 'steps':
+                steps = option['value']
+                if steps < 1:
+                    raise CortexError(LOW_NUMBER_ERROR, 'Steps')
+            elif option['name'] == 'keep' and suggest_best:
                 suggest_best = option['value']
                 if suggest_best < 1:
                     raise CortexError(LOW_NUMBER_ERROR, 'Dice kept')
@@ -1389,9 +1396,9 @@ class Default(Controller):
         elif options[0]['name'] == 'remove':
             output = game.pools.remove(pool_name, dice)
         elif options[0]['name'] == 'stepup':
-            output = game.pools.step_up(pool_name, dice[0])
+            output = game.pools.step_up(pool_name, dice[0], steps)
         elif options[0]['name'] == 'stepdown':
-            output = game.pools.step_down(pool_name, dice[0])
+            output = game.pools.step_down(pool_name, dice[0], steps)
         elif options[0]['name'] == 'clear':
             output = game.pools.clear(pool_name)
         elif options[0]['name'] == 'roll':
