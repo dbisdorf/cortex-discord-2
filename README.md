@@ -60,6 +60,7 @@ WSGIDaemonProcess cortex-pal python-home=/path/to/cortex-discord-2/venv home=/pa
 WSGIProcessGroup cortex-pal
 ```
 
+* In the Discord Developer Portal, configure the "Interactions Endpoint URL" so that it points to the URL you configured in your web server. Discord will immediately validate this URL, so be sure the bot is available through your web server before you do this.
 * Use cron or some other scheduling system to execute CortexPalPurge.py regularly.
 * When you create invite links through the Discord Developer Portal, choose the "bot" and "application.commands" scopes, and the "send messages" and "manage messages" permissions.
 
