@@ -49,6 +49,17 @@ file=(the path and filename for the database file)
 days=(the number of days to wait before deleting game information in an inactive channel)
 ```
 
+* Run CortexPalDatabase.py to initialize the sqlite database.
+* Run CortexPalRegister.py to register all of the bot's commands with Discord.
+* Set up a virtual environment (https://docs.python.org/3/library/venv.html) within which the bot will execute.
+* Configure your web server to invoke the bot's wsgi.py script, within the virtual environment, as a WSGI application. For instance, if you're using Apache and mod_wsgi, you'd add something like this to your Apache configuration:
+
+```
+        WSGIScriptAlias /cortex-pal /path/to/cortex-discord-2/wsgi.py process-group=cortex-pal
+        WSGIDaemonProcess cortex-pal python-home=/path/to/cortex-discord-2/venv home=/path/to/cortex-discord-2
+        WSGIProcessGroup cortex-pal
+```
+
 * Use cron or some other scheduling system to execute CortexPalPurge.py regularly.
 * When you create invite links through the Discord Developer Portal, choose the "bot" and "application.commands" scopes, and the "send messages" and "manage messages" permissions.
 
