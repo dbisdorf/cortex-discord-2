@@ -28,6 +28,13 @@ Run the "/help" command to get a list of all CortexPal2000's commands. You can a
 ## Abandoned Games
 If no one updates any game information in a given channel for a while, the bot will delete all game information in that channel. The clean-up time period is configurable.
 
+## Dependencies
+
+Aside from several standard Python libraries, CortexPal2000 also depends on:
+
+* endpoints (https://pypi.org/project/endpoints/)
+* discord_interactions (https://pypi.org/project/discord-py-interactions/)
+
 ## Hosting
 If you're hosting your own instance of CortexPal2000, do the following:
 
