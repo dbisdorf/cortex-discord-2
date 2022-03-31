@@ -1,5 +1,5 @@
 # cortex-discord-2
-A Discord bot to support playing the Cortex Prime RPG, using Discord slash commands.
+CortexPal2000 is a Discord bot to support playing the Cortex Prime RPG, using Discord slash commands.
 
 ## Contact the Developer
 My Discord handle is Don#2462, and my Twitter handle is @dbisdorf. Feel free to contact me with any bug reports, or, if you prefer, you can file them on GitHub.
