@@ -1,0 +1,3 @@
+discord_interactions==0.3.0
+endpoints==5.0.1
+requests==2.27.1
