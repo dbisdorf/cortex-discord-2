@@ -2,11 +2,10 @@ import requests
 import configparser
 import time
 
-url = "https://discord.com/api/v8/applications/697790419035226112/commands"
-
 config = configparser.ConfigParser()
 config.read('cortexpal.ini')
 
+url = "https://discord.com/api/v8/applications/{}/commands".format(config['discord']['app_id'])
 headers = {
     "Authorization": "Bot {}".format(config['discord']['token'])
 }
