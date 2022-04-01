@@ -47,6 +47,7 @@ file=(path and filename for the application log file)
 
 [discord]
 token=(the Discord bot token, from the developer portal)
+app_id=(the Discord application ID, from the developer portal)
 public_key=(the Discord application public key, from the developer portal)
 
 [database]
