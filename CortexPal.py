@@ -1,10 +1,3 @@
-# TODO
-# What do we pass to command functions? DB? Cursor? Game object? Roller?
-# End feedback with periods?
-
-# USER SUGGESTIONS
-# Feed stuff to the autosuggest (like "Physical" stress if it's in the game?)
-
 from endpoints import Controller, AccessDenied
 from discord_interactions import verify_key, InteractionType, InteractionResponseType
 import requests
@@ -54,6 +47,7 @@ HELP_TEXT = (
     'asset  Adjust assets.\n'
     'clean  Reset all game data for a channel.\n'
     'comp   Adjust complications.\n'
+    'dist   Adjust distinctions.\n'
     'info   Display all game information.\n'
     'option Change the bot\'s optional behavior.\n'
     'pin    Pin a message to the channel to hold game information.\n'
@@ -91,6 +85,14 @@ COMP_HELP_TEXT = (
     '/comp stepup who:beth what:confused           (steps up Beth\'s Confused complication)\n'
     '/comp stepdown who:cat what:dazed steps:2     (steps down Cat\'s Dazed complication twice)\n'
     '/comp remove who:dora what:sun in your eyes   (removes Dora\'s Sun In Your Eyes complication)```'
+)
+
+DIST_HELP_TEXT = (
+    '```Adjust distinctions.\n'
+    '\n'
+    'For example:\n'
+    '/dist add who:anne what:stubborn   (gives Ann a Stubborn distinction)\n'
+    '/dist remove who:scene what:foggy  (remove the Foggy distinction from the scene)\n```'
 )
 
 INFO_HELP_TEXT = (
@@ -989,6 +991,7 @@ class CortexGame:
 
         self.complications = GroupedNamedDice(self.db, 'complication', self)
         self.assets = GroupedNamedDice(self.db, 'asset', self)
+        self.distinctions = GroupedNamedDice(self.db, 'distinction', self)
         self.pools = DicePools(self.db, self)
         self.plot_points = Resources(self.db, 'plot points', self)
         self.stress = GroupedNamedDice(self.db, 'stress', self)
@@ -999,6 +1002,7 @@ class CortexGame:
 
         self.complications.remove_from_db()
         self.assets.remove_from_db()
+        self.distinctions.remove_from_db()
         self.pools.remove_from_db()
         self.plot_points.remove_from_db()
         self.stress.remove_from_db()
@@ -1021,6 +1025,10 @@ class CortexGame:
         if not self.complications.is_empty():
             output += '\n**Complications**\n'
             output += self.complications.output_all()
+            output += '\n'
+        if not self.distinctions.is_empty():
+            output += '\n**Distinctions**\n'
+            output += self.distinctions.output_all()
             output += '\n'
         if not self.stress.is_empty():
             output += '\n**Stress**\n'
@@ -1199,6 +1207,8 @@ class Default(Controller):
                         response_text = self.stress(game, kwargs['data']['options'])
                     elif kwargs['data']['name'] == 'asset':
                         response_text = self.asset(game, kwargs['data']['options'])
+                    elif kwargs['data']['name'] == 'dist':
+                        response_text = self.dist(game, kwargs['data']['options'])
                     elif kwargs['data']['name'] == 'xp':
                         response_text = self.xp(game, kwargs['data']['options'])
                     elif kwargs['data']['name'] == 'clean':
@@ -1496,6 +1506,31 @@ class Default(Controller):
         else:
             update_pin = False
             raise CortexError(INSTRUCTION_ERROR, options[0]['name'], 'asset')
+        if update_pin and game.has_pin():
+            game.pin_info(game.output())
+        return output
+
+    def dist(self, game, options):
+        logging.debug("dist command invoked")
+        update_pin = True
+        output = ''
+        game.update_activity()
+        owner_name = None
+        comp_name = None
+        dice = None
+        steps = 1
+        for option in options[0]['options']:
+            if option['name'] == 'who':
+                owner_name = capitalize_words(option['value'])
+            elif option['name'] == 'what':
+                comp_name = capitalize_words(option['value'])
+        if options[0]['name'] == 'add':
+            output = '{0} ({1})'.format(game.distinctions.add(owner_name, comp_name, Die('d8')), owner_name)
+        elif options[0]['name'] == 'remove':
+            output = '{0} ({1})'.format(game.distinctions.remove(owner_name, comp_name), owner_name)
+        else:
+            update_pin = False
+            raise CortexError(INSTRUCTION_ERROR, options[0], 'dist')
         if update_pin and game.has_pin():
             game.pin_info(game.output())
         return output

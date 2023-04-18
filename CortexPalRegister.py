@@ -595,6 +595,57 @@ r = requests.post(url, headers=headers, json=asset_json)
 print(r.text)
 time.sleep(5)
 
+dist_json = {
+    "name": "dist",
+    "type": 1,
+    "description": "Create or remove a distinction.",
+    "options": [
+        {
+            "name": "add",
+            "description": "Create a distinction.",
+            "type": 1,
+            "options": [
+                {
+                    "name": "who",
+                    "description": "Name of the character or player owning the distinction.",
+                    "type": 3,
+                    "required": True
+                },
+                {
+                    "name": "what",
+                    "description": "Distinction name.",
+                    "type": 3,
+                    "required": True
+                }
+            ]
+        },
+        {
+            "name": "remove",
+            "description": "Remove the distinction.",
+            "type": 1,
+            "options": [
+                {
+                    "name": "who",
+                    "description": "Name of the character or player owning the disinction.",
+                    "type": 3,
+                    "required": True
+                },
+                {
+                    "name": "what",
+                    "description": "Distinction name.",
+                    "type": 3,
+                    "required": True
+                }
+            ]
+        }
+    ]
+}
+
+print("Submitting dist")
+r = requests.post(url, headers=headers, json=dist_json)
+print(r.text)
+time.sleep(5)
+
 xp_json = {
     "name": "xp",
     "type": 1,
