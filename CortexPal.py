@@ -91,8 +91,9 @@ DIST_HELP_TEXT = (
     '```Adjust distinctions.\n'
     '\n'
     'For example:\n'
-    '/dist add who:anne what:stubborn   (gives Ann a Stubborn distinction)\n'
-    '/dist remove who:scene what:foggy  (remove the Foggy distinction from the scene)\n```'
+    '/dist add who:anne what:stubborn                (gives Ann a Stubborn distinction)\n'
+    '/dist add who:beth what:honorable knight die:6  (gives Beth a D6 Honorable Knight distinction)\n'
+    '/dist remove who:scene what:foggy               (remove the Foggy distinction from the scene)\n```'
 )
 
 INFO_HELP_TEXT = (
@@ -1524,8 +1525,16 @@ class Default(Controller):
                 owner_name = capitalize_words(option['value'])
             elif option['name'] == 'what':
                 comp_name = capitalize_words(option['value'])
+            elif option['name'] == 'die':
+                dice = parse_string_into_dice(option['value'])
         if options[0]['name'] == 'add':
-            output = '{0} ({1})'.format(game.distinctions.add(owner_name, comp_name, Die('d8')), owner_name)
+            if not dice:
+                dice = [Die('d8')]
+            elif len(dice) > 1:
+                raise CortexError(DIE_EXCESS_ERROR)
+            elif dice[0].qty > 1:
+                raise CortexError(DIE_EXCESS_ERROR)
+            output = '{0} ({1})'.format(game.distinctions.add(owner_name, comp_name, dice[0]), owner_name)
         elif options[0]['name'] == 'remove':
             output = '{0} ({1})'.format(game.distinctions.remove(owner_name, comp_name), owner_name)
         else:

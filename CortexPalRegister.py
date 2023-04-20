@@ -616,6 +616,11 @@ dist_json = {
                     "description": "Distinction name.",
                     "type": 3,
                     "required": True
+                },
+                {
+                    "name": "die",
+                    "description": "Die size.",
+                    "type": 3
                 }
             ]
         },
