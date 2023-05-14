@@ -1049,6 +1049,10 @@ class CortexGame:
             output += '\n'
         return output
 
+    def is_empty(self):
+        """Determines whether the game has any data."""
+        return self.assets.is_empty() and self.complications.is_empty() and self.distinctions.is_empty() and self.stress.is_empty() and self.plot_points.is_empty() and self.pools.is_empty() and self.xp.is_empty()
+
     def get_server(self):
         return self.server
 
