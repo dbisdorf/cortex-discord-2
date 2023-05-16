@@ -200,7 +200,7 @@ auth_request_headers = {
 
 # Set up logging.
 
-logger = logging.getLogger(__name__)
+#logger = logging.getLogger(__name__)
 
 # Classes and functions follow.
 
@@ -1175,18 +1175,18 @@ class Roller:
 
 class Default(Controller):
     def GET(self):
-        logger.info('GET')
+        logging.info('GET')
         return "watch this space"
 
     def POST(self, **kwargs):
-        logger.info('POST')
-        logger.info(self.request.headers)
+        logging.info('POST')
+        logging.info(self.request.headers)
 
         response = None
 
         if verify_key(self.request.body.read(), self.request.headers['X-Signature-Ed25519'], self.request.headers['X-Signature-Timestamp'], config['discord']['public_key']):
             if kwargs['type'] == InteractionType.PING:
-                logger.info('Responding to PING')
+                logging.info('Responding to PING')
                 response = DiscordResponsePong()
             else:
                 try:
@@ -1241,7 +1241,7 @@ class Default(Controller):
         else:
             raise AccessDenied()
                 
-        logger.info(response.json())
+        logging.info(response.json())
         return response.json()
 
     def get_game_info(self, guild, channel, suppress_join=False):
