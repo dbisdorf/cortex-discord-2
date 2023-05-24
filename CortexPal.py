@@ -43,7 +43,7 @@ JOIN_OPTION = 'join'
 
 GAME_INFO_HEADER = '**Cortex Game Information**'
 HELP_TEXT = (
-    '```CortexPal2000 v0.0.1: a Discord bot for Cortex Prime RPG players.\n'
+    '```CortexPal2000 v1.0.0: a Discord bot for Cortex Prime RPG players.\n'
     'asset  Adjust assets.\n'
     'clean  Reset all game data for a channel.\n'
     'comp   Adjust complications.\n'
@@ -152,7 +152,7 @@ REPORT_HELP_TEXT = (
 )
 
 ROLL_HELP_TEXT = (
-    '```Roll since dice.\n'
+    '```Roll some dice.\n'
     '\n'
     'For example:\n'
     '/roll dice:12               (rolls a D12)\n'
