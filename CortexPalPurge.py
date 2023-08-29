@@ -40,9 +40,13 @@ while fetching:
 cursor.close()
 
 # give warning messages
+joined = []
 for game_keys in games_to_purge:
     game = CortexPal.CortexGame(db, game_keys['server'], game_keys['channel'])
-    if not game.is_empty():
+    joined_channel = game.get_option('join')
+    if joined_channel and joined_channel != 'on' and joined_channel != 'off':
+        joined.append(game_keys)
+    elif not game.is_empty():
         output = "**ATTENTION:**\nBecause you haven't used CortexPal2000 in this channel for {} days, the bot is now discarding the game data in this channel. Here's what your game looked like:\n\n".format(purge_days)
         output += game.output()
         message_json = {
@@ -52,6 +56,10 @@ for game_keys in games_to_purge:
         message_response = json.loads(r.text)
         logging.debug(message_response)
     game.cursor.close()
+
+# don't clean joined channels
+for joined_key in joined:
+    games_to_purge.remove(joined_key)
 
 # delete from DB
 cursor = db.cursor()
